@@ -1,4 +1,45 @@
 url: https://p-wegmueller.github.io/seasight/
 template:
   bootstrap: 5
+  # later you can add a custom theme or colors here, e.g. a Provence/seasight palette
 
+home:
+  title: "seasight"
+  description: >
+    Tools for automated seasonal adjustment diagnostics, model selection, and
+    HTML reporting built on top of X-13ARIMA-SEATS (via the seasonal package).
+
+navbar:
+  structure:
+    left: [reference, articles, news]
+    right: [github]
+  components:
+    github:
+      icon: fab fa-github
+      href: https://github.com/p-wegmueller/seasight
+
+reference:
+  - title: "Core workflow"
+    contents:
+      - auto_seasonal_analysis
+      - sa_report_html
+
+  - title: "Reporting helpers"
+    contents:
+      - sa_top_candidates_table
+      - sa_existence_card
+      - sa_engine_choice_card
+
+  - title: "Utilities"
+    contents:
+      - starts_with("sa_")
+      - starts_with(".")   # internal helpers (optional; drop if you want to hide internals)
+
+articles:
+  - title: "Getting started"
+    navbar: Getting started
+    contents:
+      - seasight-intro
+
+news:
+  one_page: true

@@ -1,9 +1,6 @@
-
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
-`{r, include = FALSE} knitr::opts_chunk$set(   collapse = TRUE,   comment = "#>",   fig.path = "man/figures/README-",   out.width = "100%"  )`
-\# seasight
-<img src="man/figures/logo.png" align="right" height="140" />
+# seasight <img src="man/figures/logo.png" align="right" height="139" />
 
 <!-- badges: start -->
 <!-- CRAN status badge will go here -->
@@ -52,14 +49,11 @@ statistics and central banks.
 You can install the development version of reviser from
 [GitHub](https://github.com/) with:
 
-\`\`\`{r, eval = FALSE} remotes::install_github(“p-wegmueller/seasight”)
-\`\`\`\`
-
-Once the package is more mature, it is planned to be released on CRAN:
-
 ``` r
-install.packages("seasight")  # not yet available
+remotes::install_github(“p-wegmueller/seasight”) # not yet available
 ```
+
+Once the package is more mature and has been peer-reviewed, it is planned to be released on CRAN.
 
 ## Getting started
 
