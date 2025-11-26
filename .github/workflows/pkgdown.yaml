@@ -1,47 +1,40 @@
-# _pkgdown.yml for seasight
+name: pkgdown
 
-url: https://p-wegmueller.github.io/seasight/
-template:
-  bootstrap: 5
-  # later you can add a custom theme or colors here, e.g. a Provence/seasight palette
+on:
+  push:
+    branches: [main, master]
+  release:
+    types: [published]
+  workflow_dispatch:
 
-home:
-  title: "seasight"
-  description: >
-    Tools for automated seasonal adjustment diagnostics, model selection, and
-    HTML reporting built on top of X-13ARIMA-SEATS (via the seasonal package).
+permissions:
+  contents: write
 
-navbar:
-  structure:
-    left: [reference, articles, news]
-    right: [github]
-  components:
-    github:
-      icon: fab fa-github
-      href: https://github.com/p-wegmueller/seasight
+jobs:
+  pkgdown:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
 
-reference:
-  - title: "Core workflow"
-    contents:
-      - auto_seasonal_analysis
-      - sa_report_html
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
 
-  - title: "Reporting helpers"
-    contents:
-      - sa_top_candidates_table
-      - sa_existence_card
-      - sa_engine_choice_card
+      - uses: r-lib/actions/setup-pandoc@v2
 
-  - title: "Utilities"
-    contents:
-      - starts_with("sa_")
-      - starts_with(".")   # internal helpers (optional; drop if you want to hide internals)
+      - name: Install dependencies
+        run: |
+          install.packages("devtools")
+          install.packages("pkgdown")
+          devtools::install()
+        shell: Rscript {0}
 
-articles:
-  - title: "Getting started"
-    navbar: Getting started
-    contents:
-      - seasight-intro
-
-news:
-  one_page: true
+      - name: Build and deploy pkgdown site
+        run: |
+          pkgdown::build_site_github_pages(
+            new_process = FALSE,
+            install = FALSE
+          )
+        shell: Rscript {0}
