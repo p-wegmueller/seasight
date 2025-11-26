@@ -14,16 +14,30 @@ navbar:
     github:
       icon: "fab fa-github"
       href: "https://github.com/p-wegmueller/seasight"
+      aria-label: "seasight GitHub repository"
 
 reference:
   - title: "Core workflow"
     contents:
+      - "seasight"
       - "auto_seasonal_analysis"
       - "sa_report_html"
 
-  - title: "Reporting helpers"
+  - title: "Reporting & comparison helpers"
     contents:
       - "sa_top_candidates_table"
+      - "sa_compare"
+      - "extract_outliers"
+
+  - title: "Decision & engine helpers (advanced)"
+    contents:
+      - "sa_tests_model"
+      - "sa_is_do_not_adjust"
+      - "sa_should_switch"
+      - "sa_engine_choice_card"
+      - "sa_existence_card"
+      - "sa_existence_call"
+      - "sa_copyable_call"
 
 news:
   one_page: true
