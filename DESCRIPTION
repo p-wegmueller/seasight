@@ -1,0 +1,31 @@
+Package: seasight
+Type: Package
+Title: Tools for Seasonal Adjustment Diagnostics and Reporting
+Version: 0.0.0.9000
+Authors@R: 
+    person("Philipp", "Wegmüller", 
+           email = "philipp.wegmueller@seco.admin.ch", 
+           role = c("aut", "cre"))
+Description: Provides tools for automated diagnostics, model selection and
+    reporting for seasonal adjustment based on X-13ARIMA-SEATS. Wraps the
+    'seasonal' package to run and compare alternative specifications, extract
+    quality indicators and residual diagnostics, and generate reproducible
+    R Markdown reports for official statistics and other production workflows.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
+Imports:
+    seasonal,
+    tsbox,
+    tibble,
+    dplyr,
+    purrr,
+    stringr,
+    htmltools,
+    glue,
+    knitr
+Suggests:
+    rmarkdown,
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
