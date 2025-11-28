@@ -1,6 +1,15 @@
 url: "https://p-wegmueller.github.io/seasight/"
 template:
   bootstrap: 5
+  bootswatch: flatly
+  bslib:
+    primary: "#004f6e"  
+  light-switch: true
+  includes:
+    in_header: |
+      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" integrity="sha384-nB0miv6/jRmo5UMMR1wu3Gz6NLsoTkbqJghGIsx//Rlm+ZU03BU6SQNC66uf4l5+" crossorigin="anonymous">
+      <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" integrity="sha384-7zkQWkzuo3B5mTepMUcHkMB5jZaolc2xDwL6VFqjFALcbeS9Ggm/Yr2r3Dy4lfFg" crossorigin="anonymous"></script>
+      <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js" integrity="sha384-43gviWU0YVjaDtb/GhzOouOXtZMP/7XUzwPTstBeZFe/+rCMvRwr4yROQP43s0Xk" crossorigin="anonymous" onload="renderMathInElement(document.body);"></script>
 
 home:
   title: "seasight"
@@ -8,36 +17,64 @@ home:
 
 navbar:
   structure:
-    left: [reference]
+    left: [home, reference, articles, news]
     right: [github]
   components:
+    home:
+      text: Home
+      href: index.html
+    reference:
+      text: Reference
+      href: reference/index.html
+    articles:
+      text: Articles
+      href: articles/index.html
+    news:
+      text: News
+      href: news/index.html
     github:
-      icon: "fab fa-github"
-      href: "https://github.com/p-wegmueller/seasight"
-      aria-label: "seasight GitHub repository"
+      icon: fab fa-github
+      aria-label: "seasight on GitHub"
+      href: https://github.com/p-wegmueller/seasight
 
 reference:
-  - title: "Core workflow"
+  - title: Package overview
     contents:
-      - "seasight"
-      - "auto_seasonal_analysis"
-      - "sa_report_html"
+      - seasight     
 
-  - title: "Reporting & comparison helpers"
+  - title: Core workflow
     contents:
-      - "sa_top_candidates_table"
-      - "sa_compare"
-      - "extract_outliers"
+      - auto_seasonal_analysis
+      - sa_report_html
 
-  - title: "Decision & engine helpers (advanced)"
+  - title: Diagnostics & decisions
     contents:
-      - "sa_tests_model"
-      - "sa_is_do_not_adjust"
-      - "sa_should_switch"
-      - "sa_engine_choice_card"
-      - "sa_existence_card"
-      - "sa_existence_call"
-      - "sa_copyable_call"
+      - sa_tests_model
+      - sa_existence_call
+      - sa_existence_card
+      - sa_engine_choice_card
+      - sa_is_do_not_adjust
+      - sa_should_switch
+      - sa_top_candidates_table
+
+  - title: Utilities
+    contents:
+      - extract_outliers
+      - sa_compare
+      - sa_copyable_call
 
 news:
   one_page: true
+  
+articles:
+  - title: "Getting started"
+    contents:
+      - seasight-getting-started
+
+  - title: "Advanced usage"
+    contents:
+      - seasight-advanced  
+
+authors:
+  Philipp Wegmueller:
+    href: https://p-wegmueller.github.io

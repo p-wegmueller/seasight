@@ -1,0 +1,261 @@
+---
+title: "Getting started with seasight"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting started with seasight}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment  = "#>"
+)
+
+# Keep examples running even if seasight is not installed yet when editing
+if (!requireNamespace("seasight", quietly = TRUE)) {
+  knitr::opts_chunk$set(eval = FALSE)
+}
+```
+
+`seasight` provides tools to *see* seasonal adjustment more clearly.
+It wraps the [`seasonal`](https://cran.r-project.org/package=seasonal) interface to X-13ARIMA-SEATS with:
+
+* summary diagnostics,
+* automatic model selection, and
+* reproducible HTML reports.
+
+The main target audience are applied economists and official statisticians who
+need stable, well-documented seasonal adjustment workflows, e.g. in
+National Accounts or short-term indicators.
+
+The design follows the recommendations in Eurostat’s *ESS Guidelines on Seasonal
+Adjustment* and the *Handbook on Seasonal Adjustment*.([European Commission][1])
+
+## Setup
+
+```{r setup}
+library(seasight)
+library(seasonal)
+
+# Example monthly time series from base R
+x <- AirPassengers
+x
+```
+
+We assume that X-13ARIMA-SEATS is available via the `seasonal` package
+(see `?seasonal::seas` for installation details).
+
+## A first seasonal adjustment with `seasonal`
+
+In production you typically start from a manually maintained X-13 specification.
+Here we use the very simple default call:
+
+```{r seas-basic}
+m_current <- seas(x)
+summary(m_current)
+```
+
+`m_current` is a regular `seasonal::seas` object.
+`seasight` does **not** replace `seasonal` – it sits on top and helps you:
+
+* assess the quality of a given model,
+* explore alternative specifications, and
+* document the decision in a consistent way.
+
+## Low-level diagnostics: `sa_tests_model()`
+
+The basic diagnostic building block is `sa_tests_model()`.
+It computes a set of standard tests for a *single* `seas` model:
+
+```{r tests-model}
+tests_current <- sa_tests_model(m_current)
+tests_current
+```
+
+The exact fields may evolve, but typically include:
+
+* **Residual seasonality (QS on SA)**
+  X-11/SEATS QS statistics on the *seasonally adjusted* series.
+* **Seasonality in the original series (QSori)**
+  QS statistics on the *unadjusted* series.
+* **M7**
+  X-11 M-statistics for residual seasonality (M7 is the main one used by
+  Eurostat).([European Commission][1])
+* **IDS**
+  The “identifiable seasonality” indicator used in Eurostat practice.
+* **Residual autocorrelation (Ljung–Box)**
+  A basic check that the ARIMA model is absorbing the dynamics.
+* **Volatility reduction**
+  How much the standard deviation of growth rates falls when moving from raw
+  to seasonally adjusted data.
+* **Seasonal amplitude**
+  Size of the seasonal component relative to the series level.
+
+These metrics are the raw ingredients for the higher-level decisions discussed
+below.
+
+## Automatic model search: `auto_seasonal_analysis()`
+
+`auto_seasonal_analysis()` searches over a grid of candidate X-13 specs and
+ranks them according to a composite score:
+
+```{r auto-basic}
+res <- auto_seasonal_analysis(
+  y                = x,
+  use_fivebest     = TRUE,
+  include_easter   = "auto",
+  td_usertype      = "td",
+  engine           = "auto"   # let seasight choose between SEATS / X-11
+)
+
+names(res)
+```
+
+The most important components are:
+
+* `res$best`
+  The *best* `seas` model (a regular `seasonal::seas` object).
+
+* `res$table`
+  A tibble with one row per candidate, including:
+
+  ```{r auto-table}
+  head(res$table)
+  ```
+
+  Typical columns include:
+
+  * `model_label` – a short identifier,
+  * ARIMA structure (`ARIMA_disp` / `arima` / `spec_id`),
+  * `with_td`, `td_p` – trading-day regressor and its p-value,
+  * `QS_p_x11`, `QS_p_seats`, `QS_p` – QS on SA,
+  * `QSori_p_x11`, `QSori_p_seats`, `QSori_p` – QS on original,
+  * `LB_p` – Ljung–Box p-value,
+  * `seasonal_amp_pct` – seasonal amplitude (% of level),
+  * `vola_reduction_pct` – volatility reduction (%),
+  * `dist_sa_L1` – L1 distance vs. the current SA (if supplied),
+  * `rev_mae` – mean absolute revision (if history info is available),
+  * `score` – the composite score used for ranking.
+
+* `res$seasonality`
+  A nested list with an “existence-of-seasonality” decision for the original
+  series, based on QS, IDS and M7 (see Eurostat guidelines).([European Commission][1])
+
+### Inspecting the winning model
+
+The winning model is in `res$best`:
+
+```{r best-model}
+best <- res$best
+summary(best)
+```
+
+You can use it like any other `seas` object:
+
+```{r best-components}
+final(best)[1:6]
+original(best)[1:6]
+resid(best)[1:6]
+```
+
+If you prefer to keep everything explicit, you can access the underlying
+specification as R code using `sa_copyable_call()` (also shown in the HTML
+report, see below):
+
+```{r copyable}
+sa_copyable_call(best, x_expr = "AirPassengers")
+```
+
+## Visual “cards”: `sa_existence_card()` and `sa_engine_choice_card()`
+
+In interactive HTML outputs (e.g. pkgdown site, Quarto, Shiny) it is often
+helpful to summarise key decisions in compact “cards”.
+
+`seasight` exposes two such cards:
+
+```{r cards, results = "asis"}
+# Existence-of-seasonality card
+sa_existence_card(res)
+
+# Engine choice card (SEATS vs X-11)
+sa_engine_choice_card(res)
+```
+
+* The **existence card** explains *whether* the series should be adjusted,
+  combining QS, M7 and IDS into a single “robust” call.
+* The **engine card** provides a transparent rationale for choosing
+  SEATS vs X-11 based on their diagnostics and stability.
+
+## From analysis to decision: `sa_should_switch()`
+
+If you provide a *current* (baseline) model, `seasight` can suggest whether you
+should **keep** it or **switch** to the new best candidate.
+
+```{r auto-with-current}
+res_with_baseline <- auto_seasonal_analysis(
+  y             = x,
+  current_model = m_current
+)
+
+sa_should_switch(res_with_baseline)
+```
+
+The decision rule takes into account:
+
+* whether the new model passes basic diagnostics (QS / Ljung–Box),
+* whether the new seasonal pattern is *materially* different from the current
+  one (L1 distance, correlation of seasonal factors),
+* and whether the new model improves the composite score.
+
+You can always override this decision – the goal is to provide a transparent,
+reproducible default that is broadly aligned with Eurostat practice
+(e.g. avoid switching for tiny cosmetic improvements).([European Commission][1])
+
+## A full HTML report in one call: `sa_report_html()`
+
+For documentation, review meetings or method reports you often want a
+self-contained HTML document:
+
+```{r html-report, eval = FALSE}
+tmp_file <- tempfile(fileext = ".html")
+
+sa_report_html(
+  y             = x,
+  current_model = m_current,
+  title         = "AirPassengers – seasight demo",
+  outfile       = tmp_file
+)
+
+tmp_file
+# Browse to this file in your file manager or with browseURL(tmp_file)
+```
+
+The report includes:
+
+* an executive summary (existence of seasonality, best model, decision),
+* narrative cards explaining *why* the model was chosen,
+* comparison plots vs. the current model (levels and growth),
+* diagnostics (QS, M7, IDS, Ljung–Box, seasonal amplitude, volatility reduction),
+* outlier listings for current and new model,
+* copy-pasteable `seas()` calls for both specifications, and
+* a “Top candidates” table with the highest-ranked alternatives.
+
+## Where to go next
+
+For a deeper dive into:
+
+* using baselines (current production models),
+* passing custom trading-day candidates, and
+* understanding the built-in decision rules,
+
+see the companion vignette:
+
+> **“Advanced usage: baselines, TD candidates & decision rules”**
+
+which uses the same `AirPassengers` series but goes further into
+methodological details.
+
+
+[1]: https://ec.europa.eu/eurostat/documents/3859598/6830795/KS-GQ-15-001-EN-N.pdf?utm_source=chatgpt.com "ESS guidelines on seasonal adjustment"

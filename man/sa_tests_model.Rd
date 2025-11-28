@@ -10,11 +10,21 @@ sa_tests_model(m)
 \item{m}{A fitted \link[seasonal:seas]{seasonal::seas} object.}
 }
 \value{
-A one-row tibble with columns:
-\code{M7}, \code{IDS}, \code{QS_p_x11}, \code{QS_p_seats}, \code{QS_p},
-\code{QSori_p_x11}, \code{QSori_p_seats}, \code{QSori_p}, \code{LB_p}.
+A one-row tibble with the diagnostics above.
 }
 \description{
 Returns M7, IDS, QS on SA (X-11 & SEATS, plus overall min), QS on original
 (X-11 & SEATS, plus overall min), and Ljung–Box p-value on residuals.
+}
+\details{
+Columns:
+\itemize{
+\item \code{M7}, \code{IDS}
+\item \code{QS_p_x11}, \code{QS_p_seats}, \code{QS_p}              (QS on SA)
+\item \code{QSori_p_x11}, \code{QSori_p_seats}, \code{QSori_p}     (QS on original)
+\item \code{LB_p}
+}
+
+For backwards compatibility, the output also includes the legacy aliases
+\code{QS_SA_x11}, \code{QS_SA_seats}, \code{QS_SA}, \code{QSori_x11}, \code{QSori_seats}, \code{QSori}.
 }

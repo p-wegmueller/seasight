@@ -47,35 +47,63 @@ extract_outliers <- function(m) {
 #' Returns M7, IDS, QS on SA (X-11 & SEATS, plus overall min), QS on original
 #' (X-11 & SEATS, plus overall min), and Ljung–Box p-value on residuals.
 #'
+#' Columns:
+#' * `M7`, `IDS`
+#' * `QS_p_x11`, `QS_p_seats`, `QS_p`              (QS on SA)
+#' * `QSori_p_x11`, `QSori_p_seats`, `QSori_p`     (QS on original)
+#' * `LB_p`
+#'
+#' For backwards compatibility, the output also includes the legacy aliases
+#' `QS_SA_x11`, `QS_SA_seats`, `QS_SA`, `QSori_x11`, `QSori_seats`, `QSori`.
+#'
 #' @param m A fitted [seasonal::seas] object.
-#' @return A one-row tibble with columns:
-#'   `M7`, `IDS`, `QS_p_x11`, `QS_p_seats`, `QS_p`,
-#'   `QSori_p_x11`, `QSori_p_seats`, `QSori_p`, `LB_p`.
+#' @return A one-row tibble with the diagnostics above.
 #' @export
 sa_tests_model <- function(m) {
   stopifnot(inherits(m, "seas"))
-  # Use the robust helpers we already standardized
-  tb_sa   <- .qs_on_sa_both(m)     # -> QS_p_x11, QS_p_seats, QS_p
-  tb_ori  <- .qs_original(m)       # -> QSori_p_x11, QSori_p_seats, QSori_p
-  out <- tibble::tibble(
-    M7   = suppressWarnings(tryCatch(.m7_stat(m),  error = function(e) NA_real_)),
-    IDS  = suppressWarnings(tryCatch(.ids_flag(m), error = function(e) NA_character_)),
-    LB_p = suppressWarnings(tryCatch(.lb_p(m),     error = function(e) NA_real_))
-  )
-  dplyr::bind_cols(out, tb_sa, tb_ori)
   
+  # small helper: safely get first element of a column if present
+  get1 <- function(x, nm, default = NA_real_) {
+    if (is.null(x)) return(default)
+    if (!nm %in% names(x)) return(default)
+    v <- x[[nm]]
+    if (length(v) == 0) default else v[[1]]
+  }
+  
+  # --- core stats -----------------------------------------------------------
+  M7_val  <- suppressWarnings(tryCatch(.m7_stat(m),  error = function(e) NA_real_))
+  IDS_val <- suppressWarnings(tryCatch(.ids_flag(m), error = function(e) NA_character_))
+  LB_val  <- suppressWarnings(tryCatch(.lb_p(m),     error = function(e) NA_real_))
+  
+  # --- QS on SA (X-11 & SEATS) ---------------------------------------------
+  tb_sa <- tryCatch(.qs_on_sa_both(m), error = function(e) NULL)
+  
+  # support both naming schemes: QS_SA_*  OR  QS_p_*
+  QS_SA_x11   <- get1(tb_sa, "QS_SA_x11",   get1(tb_sa, "QS_p_x11"))
+  QS_SA_seats <- get1(tb_sa, "QS_SA_seats", get1(tb_sa, "QS_p_seats"))
+  QS_SA_min   <- get1(tb_sa, "QS_SA_min",   get1(tb_sa, "QS_p"))
+  
+  # --- QS on original -------------------------------------------------------
+  tb_ori <- tryCatch(.qs_original(m), error = function(e) NULL)
+  
+  QSori_x11   <- get1(tb_ori, "QSori_x11",   get1(tb_ori, "QSori_p_x11"))
+  QSori_seats <- get1(tb_ori, "QSori_seats", get1(tb_ori, "QSori_p_seats"))
+  QSori_min   <- get1(tb_ori, "QSori_min",   get1(tb_ori, "QSori_p"))
+  
+  # --- main output: "new" column names -------------------------------------
   out <- tibble::tibble(
-    M7, IDS,
-    QS_p_x11   = QS_SA_x11,
-    QS_p_seats = QS_SA_seats,
-    QS_p       = QS_SA_min,
+    M7   = M7_val,
+    IDS  = IDS_val,
+    QS_p_x11      = QS_SA_x11,
+    QS_p_seats    = QS_SA_seats,
+    QS_p          = QS_SA_min,
     QSori_p_x11   = QSori_x11,
     QSori_p_seats = QSori_seats,
     QSori_p       = QSori_min,
-    LB_p
+    LB_p          = LB_val
   )
   
-  # --- legacy aliases to avoid test warnings ---
+  # --- legacy aliases to avoid breaking existing code/tests -----------------
   out <- dplyr::mutate(
     out,
     QS_SA_x11   = .data$QS_p_x11,
@@ -85,9 +113,10 @@ sa_tests_model <- function(m) {
     QSori_seats = .data$QSori_p_seats,
     QSori       = .data$QSori_p
   )
-  out
   
+  out
 }
+
 
 # --- Aggregate existence-of-seasonality call ----------------------------------
 

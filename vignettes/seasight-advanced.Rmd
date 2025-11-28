@@ -1,0 +1,340 @@
+---
+title: "Advanced usage: baselines, TD candidates & decision rules"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Advanced usage: baselines, TD candidates & decision rules}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment  = "#>"
+)
+
+if (!requireNamespace("seasight", quietly = TRUE)) {
+  knitr::opts_chunk$set(eval = FALSE)
+}
+```
+
+This vignette digs deeper into three aspects of `seasight`:
+
+1. Using **baselines** (`current_model`) to compare against existing production
+   specifications.
+2. Providing **trading-day (TD) / calendar candidates** explicitly.
+3. Understanding the built-in **decision rules** around
+   *“DO_NOT_ADJUST” vs “adjust”* and *“keep current” vs “switch to new”*.
+
+We keep working with `AirPassengers` for reproducibility, but the workflow
+is designed with official statistics in mind (National Accounts, STS, etc.).
+
+## 1. Baselines: comparing against your current production model
+
+In many institutions the starting point is a long-standing “legacy” model
+(e.g. maintained in X-13, JDemetra+ or custom scripts). Changing this model
+is costly: it affects time series, documentation and possibly downstream
+forecasting systems.
+
+`seasight` makes this explicit via the `current_model` argument.
+
+```{r setup}
+library(seasonal)
+library(seasight)
+
+x <- AirPassengers
+
+# A somewhat richer baseline spec for illustration
+m_current <- seas(
+    x,
+    x11        = "",
+    regression = c("td", "easter"),
+    arima.model = c(0, 1, 1, 0, 1, 1)
+)
+
+sa_tests_model(m_current)
+```
+
+We now run the automatic analysis **with** this baseline:
+
+```{r auto-baseline}
+res <- auto_seasonal_analysis(
+  y             = x,
+  current_model = m_current,
+  use_fivebest  = TRUE,
+  include_easter = "auto",
+  engine        = "auto"
+)
+
+names(res)
+```
+
+Key differences compared to the “no baseline” case:
+
+* `res$table` includes an additional row for the **current** model
+  (if it was not already part of the candidate grid).
+* Diagnostics include *distances vs current SA* (e.g. `dist_sa_L1`,
+  correlation of seasonal factors).
+* The decision helper `sa_should_switch()` becomes meaningful.
+
+### 1.1 Visual comparison
+
+You can use the full HTML report:
+
+```{r html-report-baseline, eval = FALSE}
+tmp_file <- tempfile(fileext = ".html")
+sa_report_html(
+  y             = x,
+  current_model = m_current,
+  title         = "AirPassengers – baseline vs. seasight best",
+  outfile       = tmp_file
+)
+tmp_file
+```
+
+Internally, the report:
+
+* aligns the current and new SA series,
+* compares levels and growth rates in two plots, and
+* summarises differences in a small statistics table (mean, sd, min, max).
+
+### 1.2 Numeric comparison: `sa_top_candidates_table()` and `sa_compare()`
+
+For shorter outputs (e.g. in an R Markdown report) you can insert the
+“Top candidates” table directly:
+
+```{r top-candidates, results = "asis"}
+sa_top_candidates_table(
+  res,
+  current_model = m_current,
+  y             = x,
+  n             = 5
+)
+```
+
+* ✅ rows highlight the **best** model in green.
+* ⭐ rows highlight the **current** model in blue (even if it is not in the top-5).
+* The airline model ARIMA(0 1 1)(0 1 1) is appended in red if available.
+
+## 2. Providing trading-day / calendar candidates
+
+Eurostat guidelines recommend that calendar effects (working-day, leap-year,
+Easter, etc.) be treated explicitly, particularly for STS indicators and
+National Accounts.([European Commission][1])
+
+In many production systems, calendar regressors are pre-computed and stored in
+databases. `seasight` can consume these via the `td_candidates` argument.
+
+The idea is:
+
+* You provide a **named list** of candidate regressors (typically `ts` objects).
+* `auto_seasonal_analysis()` tries models *with* and *without* each TD candidate.
+* The winning model’s TD choice (and its significance) is visible in `res$table`
+  and in the HTML report.
+
+### 2.1 A simple length-of-month regressor (for illustration)
+
+For a proper TD regressor you would use working-day counts by weekday.
+Here we just construct a very simple **length-of-month** regressor to
+illustrate the mechanics.
+
+```{r td-length-of-month}
+# Helper: number of days in the month of a given Date
+days_in_month <- function(date) {
+  # first of this month
+  d0 <- as.Date(format(date, "%Y-%m-01"))
+  # first of next month
+  d1 <- seq(d0, by = "month", length.out = 2)[2]
+  as.integer(d1 - d0)
+}
+
+# Construct dates for AirPassengers
+dates <- seq(
+  from = as.Date("1949-01-01"),
+  by   = "month",
+  length.out = length(x)
+)
+
+ndays <- vapply(dates, days_in_month, integer(1))
+
+# Centre the regressor (common in TD practice)
+len_centered <- ndays - mean(ndays)
+
+td_len <- ts(
+  len_centered,
+  start     = start(x),
+  frequency = frequency(x)
+)
+
+plot(td_len, main = "Centered length-of-month regressor")
+```
+
+We now pass this as a **single** TD candidate:
+
+```{r auto-with-td}
+res_td <- auto_seasonal_analysis(
+  y             = x,
+  current_model = m_current,
+  td_candidates = list(lenmonth = td_len),
+  td_usertype   = "td",
+  include_easter = "auto",
+  engine        = "auto"
+)
+
+head(res_td$table)
+```
+
+You should see columns like:
+
+* `with_td` – whether the TD regressor is included,
+* `td_label` / `td_name` – which regressor is used,
+* `td_p` – p-value (minimum over TD coefficients if several).
+
+In a real system you might pass e.g.
+
+* a working-day regressor with six weekday dummies,
+* a “trading-day contrast” regressor (e.g. 6 contrasts + length-of-month),
+* or decompositions of public-holiday calendars.
+
+## 3. Decision rules: existence of seasonality & switching models
+
+### 3.1 “DO_NOT_ADJUST” vs “adjust”
+
+The **first** decision is whether the series should be seasonally adjusted at
+all. `seasight` exposes this via:
+
+* `res$seasonality$overall$call_overall`, and
+* the helper `sa_is_do_not_adjust()`.
+
+The exact thresholds follow Eurostat recommendations (QS on original / SA,
+M-statistics, IDS), but the logic is:
+
+1. If there is *no material seasonality* in the original series
+   (QSori and M7 indicate “no seasonality”), then:
+
+   * `call_overall` becomes `"DO_NOT_ADJUST"`;
+   * the report will keep the raw series as the preferred series;
+   * `sa_is_do_not_adjust()` returns `TRUE` for the best candidate row.
+
+2. Otherwise, the series is treated as seasonal and an SA model is selected.
+
+Example:
+
+```{r dna-decision}
+# For AirPassengers we expect clear seasonality
+res_td$seasonality$overall
+
+# Translate the table row for the best model into a DO_NOT_ADJUST flag
+best_row <- res_td$table[1, ]
+sa_is_do_not_adjust(best_row)
+```
+
+For series with borderline or unstable seasonality this rule helps to avoid
+spurious adjustment, as recommended by the Eurostat ESS Guidelines.([European Commission][1])
+
+### 3.2 “Keep current model” vs “switch to new model”
+
+Given that seasonal adjustment revisions can affect downstream users,
+Eurostat and central banks usually discourage frequent model changes
+unless there is a clear quality gain.([European Commission][1])
+
+`seasight` encodes this in `sa_should_switch(res)`:
+
+```{r switch-decision}
+sa_should_switch(res_td)
+```
+
+The function returns a string, typically:
+
+* `"CHANGE_TO_NEW_MODEL"` or
+* `"KEEP_CURRENT_MODEL"`.
+
+Internally, it uses the *best* row of `res$table` and compares against the
+current model (if supplied). The rule checks, for instance:
+
+* **Residual diagnostics:**
+  The new model must pass basic tests (QS on SA, Ljung–Box). If the best model
+  fails badly (e.g. strong remaining seasonality, severe autocorrelation),
+  the recommendation is to **keep** the current model.
+
+* **Similarity of seasonal pattern:**
+  If the new model’s seasonal factors are almost perfectly correlated with the
+  current ones (e.g. correlation > 0.995 and very small L1 distance), there is
+  little reason to switch.
+
+* **Score and revisions:**
+  If the new model improves AICc, residual diagnostics *and* revision metrics
+  (where available) by a reasonable margin, switching is encouraged.
+
+You can tune the thresholds via arguments such as
+
+```r
+sa_should_switch(
+  res_td,
+  thr_qs   = 0.10,
+  thr_lb   = 0.05,
+  thr_corr = 0.995,
+  thr_dist = 0.5
+)
+```
+
+(Argument names may evolve; see `?sa_should_switch` for the current interface.)
+
+### 3.3 Putting it together: a minimal decision wrapper
+
+In a production pipeline you might want a very compact decision summary
+per series. For example:
+
+```{r decision-wrapper}
+sa_decision <- function(y, current_model = NULL, td_candidates = NULL) {
+  res <- auto_seasonal_analysis(
+    y             = y,
+    current_model = current_model,
+    td_candidates = td_candidates,
+    engine        = "auto",
+    include_easter = "auto"
+  )
+  
+  best_row <- res$table[1, ]
+  
+  list(
+    call_overall   = res$seasonality$overall$call_overall[1],
+    do_not_adjust  = sa_is_do_not_adjust(best_row),
+    switch_decision = if (!is.null(current_model)) sa_should_switch(res) else "NO_BASELINE",
+    best_model      = res$best,
+    diagnostics     = sa_tests_model(res$best)
+  )
+}
+
+dec <- sa_decision(x, current_model = m_current, td_candidates = list(lenmonth = td_len))
+dec$call_overall
+dec$do_not_adjust
+dec$switch_decision
+```
+
+You can then store e.g. `dec$diagnostics` and `sa_copyable_call(dec$best_model, x_expr = "…")`
+in your internal documentation, and regenerate the full HTML report only when
+needed.
+
+## 4. Further reading
+
+The methodological choices in `seasight` build on the standard references
+used in official statistics:
+
+* **Eurostat (2015): ESS Guidelines on Seasonal Adjustment.**
+  Practical framework for seasonal adjustment in the European Statistical
+  System, including diagnostics, revision policies and documentation.([European Commission][1])
+
+* **Eurostat (2018): Handbook on Seasonal Adjustment (2018 edition).**
+  Comprehensive treatment of X-13ARIMA-SEATS and TRAMO/SEATS methods, including
+  M-statistics, QS tests, calendar effects and revision analysis.
+
+* **Gómez & Maravall (1996)** and subsequent work on TRAMO/SEATS, for background
+  on model-based decomposition and automatic model identification.
+
+* **Grudkowska (2015, 2016): JDemetra+ User Guide and Reference Manual,** for an
+  implementation of similar principles in an official ESS tool.
+
+`seasight` aims to provide a lightweight, R-native interface for these ideas,
+compatible with `seasonal` and suitable for integration into reproducible
+forecasting and National Accounts workflows.
