@@ -23,10 +23,13 @@ Imports:
     purrr,
     stringr,
     htmltools,
-    glue,
-    knitr
+    glue
 Suggests:
-    rmarkdown,
-    testthat (>= 3.0.0)
+    testthat (>= 3.0.0),
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr
 Config/testthat/edition: 3
 URL: https://p-wegmueller.github.io/seasight/
+
+

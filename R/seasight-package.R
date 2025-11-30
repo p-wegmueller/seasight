@@ -1,11 +1,18 @@
-#' seasight: Seasonal Adjustment Diagnostics and Reporting
+#' seasight: Tools to *see* seasonal adjustment more clearly
 #'
-#' Tools for running and comparing X-13ARIMA-SEATS specifications,
-#' ranking them by diagnostics, and generating HTML reports.
+#' `seasight` provides helper functions to run, compare and document
+#' seasonal adjustment in a transparent and reproducible way. It builds
+#' on the [seasonal](https://CRAN.R-project.org/package=seasonal) package,
+#' the R interface to X-13ARIMA-SEATS.
 #'
-#' @docType _PACKAGE
-#' @name seasight
+#' The main user-facing functions include:
+#'
+#' - [auto_seasonal_analysis()] for automatic model search & comparison
+#' - [sa_report_html()] to generate HTML diagnostics reports
+#' - [sa_compare()] and [sa_top_candidates_table()] for compact summaries
+#'
 #' @importFrom dplyr %>%
 #' @importFrom stats arima setNames
 #' @importFrom utils capture.output
-NULL
+#' @keywords internal
+"_PACKAGE"

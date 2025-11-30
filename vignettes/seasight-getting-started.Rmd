@@ -10,7 +10,9 @@ vignette: >
 ```{r, include = FALSE}
 knitr::opts_chunk$set(
   collapse = TRUE,
-  comment  = "#>"
+  comment  = "#>",
+  echo = TRUE,   # show code
+  eval = FALSE   # don't run code by default
 )
 
 # Keep examples running even if seasight is not installed yet when editing
