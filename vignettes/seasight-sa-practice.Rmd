@@ -1,0 +1,496 @@
+---
+title: "Seasonal adjustment in practice: implementing common recommendations with `seasight`"
+output: rmarkdown::html_vignette
+bibliography: references.bib
+vignette: >
+  %\VignetteIndexEntry{Seasonal adjustment in practice: implementing common recommendations with `seasight`}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment  = "#>",
+  eval     = FALSE  # examples are for illustration; run interactively as needed
+)
+
+library(seasonal)
+library(seasight)
+
+library(dplyr)
+library(tsbox)
+```
+
+# Seasonal adjustment in practice: implementing common recommendations with seasight
+
+Seasonal adjustment is one of those tasks that looks “routine” from the outside, but quickly becomes delicate once you are responsible for official statistics or policy-relevant indicators. Decisions about transformation, calendar adjustment, model choice and revision tolerance all leave fingerprints on published series – and international guidelines (from statistical offices and central banks) rightly insist on transparency, stability and clear documentation.
+
+This vignette shows how **seasight** can help put such recommendations into practice. In **Part I**, we summarise internationally common good-practice principles for seasonal adjustment – as reflected, for example, in manuals from European and national statistical offices and in the applied time-series literature. We deliberately focus on a small set of recurring themes: when to seasonally adjust (and when not), how to treat calendar effects, what “parsimonious and stable” really means, and how to handle model review and revisions.
+
+In **Part II**, we translate these principles into concrete workflows using seasight. The aim is not to prescribe a single “correct” model, but to show how a structured toolchain – automatic model search, standardised diagnostics, explicit “do-not-adjust” and “switch” decisions, and reproducible reporting – can make seasonal adjustment more consistent and auditable across many series. The examples use simple benchmark series, but are written with quarterly national accounts and short-term indicators in mind.
+
+
+## 2. Part I – Internationally common recommendations
+
+Seasonal adjustment in official statistics is now supported by a fairly
+coherent body of guidance. The Eurostat / ESS Guidelines on Seasonal
+Adjustment, the more recent Eurostat review reports for national
+accounts, and practice notes from institutions such as the US Bureau of
+Economic Analysis (BEA) and the UK Office for National Statistics (ONS)
+all emphasise similar principles. The details differ from office to
+office, but the core message is stable: seasonal adjustment should be
+economically meaningful, statistically well-founded, parsimonious and
+transparent.
+
+The following subsections summarise these common elements in a pragmatic
+way, focusing on what typically matters for a production workflow.
+
+### 2.1 When is seasonal adjustment appropriate?
+
+> **Key points**
+>
+> - Adjust only when there is both an **economic rationale** and **statistical evidence** for seasonality.  
+> - Very **short series** are usually *not* good candidates for seasonal adjustment.  
+> - If the pattern is unstable or unclear, it is often better to **publish NSA** and revisit later.
+
+The first decision is not *how* to adjust, but *whether* a series should
+be adjusted at all. International guidelines recommend combining three
+types of arguments:
+
+- an **economic rationale** for expecting seasonal patterns,
+- sufficiently long and coherent time series,
+- and clear **statistical evidence** of seasonality.
+
+In practice, most offices require a minimum length (for example at least
+three years of data, and preferably more) before they are comfortable
+treating a series as seasonally adjusted. Very short series provide
+little information on seasonality and make model-based diagnostics
+fragile. For borderline cases, it is often better to work with the
+non-adjusted series and reassess once more data have accumulated.
+
+Economic content matters as much as statistical tests. For many real-
+economy indicators—industrial production, construction, retail trade,
+tourism, labour market flows—it is natural to expect recurring seasonal
+patterns driven by weather, holidays or institutional arrangements. For
+other aggregates, such as certain income components or composite ratios,
+seasonal adjustment may be less meaningful. Eurostat and national
+agencies therefore insist that seasonal adjustment should be justified
+by the nature of the series, not just by a p-value.
+
+When statistical tests and visual diagnostics do not show a stable and
+economically interpretable seasonal pattern, the recommended choice is
+often **not** to seasonally adjust. This avoids introducing spurious
+movements that could confuse users and complicate revisions.
+
+### 2.2 Building models that are parsimonious and stable
+
+> **Key points**
+>
+> - Prefer **simple, robust ARIMA structures** (often airline-type) over heavily parameterised models.  
+> - Use **few, well-justified outliers**; lots of outliers usually signal a model problem.  
+> - Keep the modelling strategy **consistent** across related series and over time.
+
+Once the decision to seasonally adjust has been taken, guidelines
+converge on a preference for **parsimonious, robust models**. For many
+macroeconomic series, ARIMA models from the “airline” family (or small
+extensions thereof) are sufficient. Additional autoregressive or moving
+average terms should only be added when they bring a clear gain in fit
+or diagnostics; otherwise they make the model harder to interpret and
+less stable over time.
+
+Outlier treatment is another area where international practice is
+remarkably consistent. Automatic detection of additive outliers (AO),
+level shifts (LS) and sometimes transitory changes (TC) is encouraged,
+but only within reasonable limits. Critical values are typically chosen
+so that only a handful of major disturbances are picked up, and each
+identified outlier should be checked for economic plausibility (strikes,
+policy changes, pandemics, exceptional weather, etc.). A model that
+relies on dozens of outliers is usually seen as a sign that the basic
+structure needs rethinking.
+
+The choice between X-13ARIMA-SEATS and TRAMO-SEATS type decompositions
+is less important than the **consistency** with which an office applies
+its chosen tools. What matters is that the modelling strategy is stable,
+well documented and applied in a coherent way across related series.
+
+### 2.3 Calendar effects: trading days and moving holidays
+
+> **Key points**
+>
+> - Include trading-day / working-day effects only when **economically plausible and statistically significant**.  
+> - Check that estimated coefficients have the **expected sign**.  
+> - Use Easter and other moving holidays **only where patterns are strong and stable**.
+
+Adjusting for calendar effects is an area where economic reasoning and
+statistical evidence have to be closely intertwined. Trading-day or
+working-day effects are expected in sectors where the number of working
+days directly affects production or sales—manufacturing, construction,
+wholesale and retail trade, transport and some business services. In
+other domains the effect may be weak or absent.
+
+Guidelines therefore discourage the unconditional inclusion of calendar
+regressors. Instead, most institutions follow a two-step logic. First,
+they ask whether a TD or working-day effect is economically plausible
+for the series in question. Second, they check whether estimated
+coefficients are statistically significant and have the expected sign
+(e.g. more working days should increase output, not reduce it). If
+either condition fails, the usual recommendation is to drop the
+calendar term.
+
+Moving holidays, especially Easter, are treated in a similar spirit.
+Where there is a strong and well-documented pattern (for example in
+certain tourism or retail series), Easter regressors are included and
+regularly monitored. Elsewhere, offices are cautious and avoid relying
+on automatic inclusion based on marginal test results, as this can
+destabilise models and lead to erratic revisions.
+
+### 2.4 Stability, revisions and model review
+
+> **Key points**
+>
+> - Monitor **revisions** to SA series, especially for the most recent periods.  
+> - Check for **residual seasonality** in key aggregates (GDP components, major indicators).  
+> - Separate a stable **production model** from scheduled, documented **model reviews**.
+
+International guidance repeatedly stresses that seasonal adjustment
+should contribute to a **clearer** view of the underlying economy, not
+to additional noise. This has two consequences.
+
+First, the **revisions** induced by seasonal adjustment should be
+reasonable in size. National accounts teams routinely monitor how much
+the latest published SA figures differ from earlier vintages, especially
+for the most recent quarters or months. Excessive revisions, or large
+systematic corrections in one direction, suggest that models need
+attention. Many offices therefore distinguish between a “current”
+production model (kept fixed between releases) and scheduled **model
+reviews** where structural changes are considered.
+
+Second, seasonally adjusted series should not exhibit **residual
+seasonality**. After adjustment, standard tests and diagnostic plots are
+used to check whether any systematic seasonal pattern remains. If
+residual seasonality is detected in key aggregates—such as GDP by
+expenditure component—Eurostat and other organisations recommend a
+thorough review of the underlying models, possibly including the
+calendar treatment or the choice of decomposition engine.
+
+### 2.5 Documentation, transparency and reproducibility
+
+> **Key points**
+>
+> - Maintain a written **SA policy** covering tools, defaults and review rules.  
+> - Store **full specifications and metadata** for each series.  
+> - Archive important **model changes and reports** so impacts on published data remain traceable.
+
+Finally, all major guidelines emphasise the importance of **clear
+documentation and reproducibility**. Seasonal adjustment is not just a
+technical pre-processing step; it is part of the statistical product and
+should therefore be understandable to internal users and, where
+feasible, to external users as well.
+
+At the institutional level, this typically takes the form of a written
+seasonal adjustment policy that describes:
+
+- which engines and software are used,
+- the standard model families and default options,
+- the treatment of calendar effects and outliers,
+- the rules for model review and for handling breaks or major events.
+
+At the series level, agencies are encouraged to maintain metadata that
+allow the exact SA specification to be reconstructed: ARIMA orders,
+regressors, outliers, transformations, and the version of the software
+used. Some offices archive full model specifications or reports whenever
+a major change is implemented, so that the impact on published time
+series can be traced back later.
+
+This background explains the design of **seasight**: its functions are
+meant to support not only the estimation of seasonal adjustment models,
+but also the *governance* around them—existence checks, model
+comparison, decision rules, and reproducible documentation.
+
+## 3. Part II – Implementing the recommendations with seasight
+
+In this section we sketch how the international recommendations from
+Part I can be operationalised with **seasight**. The examples use the
+classic `AirPassengers` series for illustration, but the same workflow
+is intended for production series in national accounts and short-term
+statistics.
+
+### 3.1 Deciding whether to seasonally adjust
+
+Part I emphasised that seasonal adjustment should only be applied when
+there is both an economic rationale and statistical evidence for
+seasonality. In **seasight**, this decision is supported by:
+
+* the **seasonality diagnostics** inside `auto_seasonal_analysis()`, and
+* explicit decision helpers such as `sa_is_do_not_adjust()`.
+
+A typical first step is to run the automatic analysis without specifying
+a baseline model:
+
+```{r sa-auto-basic, eval = FALSE}
+y <- AirPassengers
+
+res <- auto_seasonal_analysis(
+  y              = y,
+  engine         = "auto",
+  td_usertype    = "td",
+  include_easter = "auto"
+)
+
+names(res)
+#> "best" "table" "specs_tried" "frequency" "transform"
+#> "weak_seasonality" "baseline" "seasonality"
+```
+
+The `seasonality` component summarises the main evidence:
+
+```{r sa-auto-seasonality, eval = FALSE}
+res$seasonality$overall
+#> contains tests / calls such as:
+#> - call_overall   : textual summary (e.g. "SA advisable")
+#> - call_td        : recommendation on trading days
+#> - call_easter    : recommendation on Easter regressor
+```
+
+To connect this directly to a “do not adjust” rule, you can use the
+first row of the candidate table (the currently selected best model):
+
+```{r sa-do-not-adjust, eval = FALSE}
+best_row <- res$table[1, ]
+sa_is_do_not_adjust(best_row)
+#> TRUE / FALSE depending on weak seasonality, diagnostics, etc.
+```
+
+In a production setting, this allows you to automate the triage between:
+
+* series that are **clearly seasonal** and should be adjusted;
+* series where seasonality is **weak or unstable** and may be left
+  non-adjusted; and
+* borderline cases that need manual review (e.g. via plots and the
+  full report).
+
+> **With seasight**
+>
+> * `auto_seasonal_analysis()` concentrates tests and diagnostics in one place.
+> * `res$seasonality` and `sa_is_do_not_adjust()` translate them into a clear decision flag.
+> * This makes it easy to log, review and revise “SA vs NSA” choices across many series.
+
+### 3.2 Parsimonious and stable models
+
+Guidelines recommend simple, robust ARIMA structures with only a small
+number of well-justified outliers. seasight supports this through:
+
+* automatic **candidate generation** in `auto_seasonal_analysis()`,
+* a structured **candidate table** with key diagnostics, and
+* helpers like `sa_top_candidates_table()` and `sa_tests_model()`.
+
+The candidate table can be inspected directly:
+
+```{r sa-candidate-table, eval = FALSE}
+head(res$table[
+  ,
+  c("model_label", "arima", "M7", "IDS", "QS_SA", "LB_p", "rev_mae")
+])
+```
+
+This lets you check at a glance:
+
+* the ARIMA structure (`arima`),
+* core diagnostics (`M7`, `IDS`, `QS_SA`, `LB_p`),
+* and a simple revision metric (`rev_mae`) if revision data are
+  available.
+
+For a more compact view, `sa_top_candidates_table()` produces a nicely
+formatted table (for R Markdown or HTML):
+
+```{r sa-top-candidates, eval = FALSE}
+tab <- sa_top_candidates_table(res)
+tab
+```
+
+To drill down into the selected best model, you can use:
+
+```{r sa-tests-best, eval = FALSE}
+tests_best <- sa_tests_model(res$best)
+tests_best
+```
+
+This returns a one-row tibble with:
+
+* `M7` (X-11 M7 measure),
+* `IDS` (identifiable seasonality flag),
+* QS p-values on SA and original series,
+* and the Ljung–Box p-value on residuals.
+
+Combined with visual inspection (e.g. via `plot(res$best)` from
+`seasonal`), this supports the guideline to favour parsimonious,
+well-behaved models and to review any “exotic” specification that only
+marginally improves diagnostics.
+
+> **With seasight**
+>
+> * The candidate table encodes the diagnostics that matter for stability.
+> * `sa_top_candidates_table()` highlights the few models that are worth a human look.
+> * `sa_tests_model()` gives a standardised diagnostic vector for documentation and monitoring.
+
+### 3.3 Calendar effects: trading days and Easter
+
+In Part I, calendar adjustment was framed as a two-step decision:
+economic plausibility and statistical evidence. The same logic underpins
+the TD and Easter handling in **seasight**.
+
+When you call `auto_seasonal_analysis()`, you specify the *type* of
+trading-day adjustment you are willing to consider (if any):
+
+```{r sa-auto-td, eval = FALSE}
+res_td <- auto_seasonal_analysis(
+  y              = y,
+  engine         = "auto",
+  td_usertype    = "td",     # or "working_days", "none", etc.
+  include_easter = "auto"    # let seasight test Easter where meaningful
+)
+```
+
+Internally, seasight compares candidates **with** and **without**
+calendar regressors and records the impact on diagnostics and fit. In
+the candidate table you can inspect, for example, whether the preferred
+model uses TD and Easter:
+
+```{r sa-td-inspect, eval = FALSE}
+res_td$table[
+  1,
+  c("model_label", "with_td", "QS_SA", "LB_p")
+]
+```
+
+The text calls in `res_td$seasonality` summarise the recommended
+treatment:
+
+```{r sa-td-calls, eval = FALSE}
+res_td$seasonality$overall$call_td
+res_td$seasonality$overall$call_easter
+```
+
+This allows you to line up the **economic expectation** (e.g. “TD should
+matter for production, but probably not for this ratio series”) with the
+statistical evidence, and to document the final choice.
+
+> **With seasight**
+>
+> * TD / Easter are treated as **options**, not automatic defaults.
+> * The candidate table shows how diagnostics change with and without calendar effects.
+> * `res$seasonality$overall$call_td` and `call_easter` make the final choice explicit and reproducible.
+
+### 3.4 Stability, revisions and model review
+
+International guidance stresses that seasonal adjustment should not
+introduce excessive revisions, and that residual seasonality should be
+closely monitored. seasight offers several tools for this:
+
+* revision-oriented diagnostics in the candidate table (`rev_mae`,
+  `dist_sa_L1`, …),
+* explicit **baseline handling** via `current_model`, and
+* side-by-side comparison through `sa_compare()` and `sa_should_switch()`.
+
+Suppose you already have a production model `m_current` for `y`:
+
+```{r sa-current-model, eval = FALSE}
+m_current <- seas(y,
+  x11 = "",
+  transform.function = "log",
+  regression.aictest = "td",
+  arima.model = c(0, 1, 1, 0, 1, 1)  # example only
+)
+```
+
+You can pass this as a baseline to `auto_seasonal_analysis()`:
+
+```{r sa-auto-with-baseline, eval = FALSE}
+res_baseline <- auto_seasonal_analysis(
+  y              = y,
+  current_model  = m_current,
+  engine         = "auto",
+  td_usertype    = "td",
+  include_easter = "auto"
+)
+```
+
+The result now contains both the new best model and information on the
+baseline. To decide whether a switch is warranted:
+
+```{r sa-switch-decision, eval = FALSE}
+sa_should_switch(res_baseline)
+#> "KEEP_BASELINE" / "SWITCH_TO_BEST" / similar coded decision
+```
+
+For a more detailed view, `sa_compare()` produces a structured
+comparison of baseline and best model, typically including a compact set
+of revision metrics, diagnostic differences and possibly narrative text:
+
+```{r sa-compare, eval = FALSE}
+cmp <- sa_compare(
+  best    = res_baseline$best,
+  current = m_current
+)
+cmp
+```
+
+This supports the idea of a **stable production model** (kept unchanged
+between releases) combined with periodic, well-documented model reviews.
+
+> **With seasight**
+>
+> * `current_model` lets you treat the existing production spec as an explicit baseline.
+> * `sa_should_switch()` implements a transparent decision rule for model changes.
+> * `sa_compare()` summarises the impact of switching in terms of diagnostics and revisions.
+
+### 3.5 Documentation, transparency and reproducibility
+
+Finally, seasight is designed to help with the “governance” side of
+seasonal adjustment: documenting choices, making them reproducible, and
+keeping an audit trail of changes.
+
+Two core tools are:
+
+* `sa_report_html()` – a one-shot HTML report documenting the current
+  model, diagnostics and (if applicable) baseline comparison,
+* `sa_copyable_call()` – a helper that returns a clean `seasonal::seas()`
+  call for the selected model.
+
+To generate a report for the automatic analysis:
+
+```{r sa-report, eval = FALSE}
+sa_report_html(
+  res,
+  file = "AirPassengers_seasight_report.html"
+)
+#> Opens an HTML report with:
+#> - key diagnostics
+#> - top candidates table
+#> - plots for original, SA and calendar-adjusted series
+#> - (if baseline provided) comparison of best vs current model
+```
+
+To obtain a reproducible call for your chosen specification:
+
+```{r sa-copy-call, eval = FALSE}
+sa_copyable_call(res$best)
+#> Returns a clean seas(...) call as text, ready to paste into your
+#> production scripts or metadata system.
+```
+
+Together, these tools make it easier to:
+
+* embed seasonal adjustment decisions into internal **method reports**,
+* store full specifications for **metadata and audit** purposes,
+* and communicate model changes in a structured way.
+
+> **With seasight**
+>
+> * `sa_report_html()` turns a technical analysis into a readable, archivable document.
+> * `sa_copyable_call()` ensures that every chosen model has a clean, reproducible code representation.
+> * This aligns directly with guideline demands for transparent, well-documented seasonal adjustment.
+
+
+

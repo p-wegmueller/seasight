@@ -238,16 +238,20 @@ existing seasonal adjustment workflows.
 - Internal method reports on (re-)design of seasonal adjustment strategy
 - Comparing legacy and new SA specifications during transition periods
 
-## Articles
+## Documentation & articles
 
-On the package website you can find two introductory articles:
+- **Getting started**  
+  A step-by-step introduction to `auto_seasonal_analysis()` and `sa_report_html()`  
+  → See the vignette: [Getting started with seasight](articles/seasight-getting-started.html).
 
-- [Getting started with seasight](articles/seasight-getting-started.html)  
-  Basic workflow from a `seasonal::seas()` model to diagnostics and an HTML report.
+- **Advanced usage**  
+  Baseline models, trading-day candidates and decision rules  
+  → See the vignette: [Advanced usage: baselines, TD candidates & decision rules](articles/seasight-advanced.html).
 
-- [Advanced usage: baselines, TD candidates & decision rules](articles/seasight-advanced.html)
-  How to work with a current production model, custom trading-day regressors and
-  seasight’s built-in decision rules.
+- **Seasonal adjustment in practice**  
+  How to implement internationally recommended practices (ESS Guidelines, BEA, ONS, etc.)
+  using `seasight`’s diagnostics and decision helpers.  
+  → See the vignette: [Advanced usage: baselines, TD candidates & decision rules](articles/seasight-sa-practice.html).
 
 ## Contributing
 

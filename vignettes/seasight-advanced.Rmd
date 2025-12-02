@@ -1,6 +1,7 @@
 ---
 title: "Advanced usage: baselines, TD candidates & decision rules"
 output: rmarkdown::html_vignette
+bibliography: references.bib
 vignette: >
   %\VignetteIndexEntry{Advanced usage: baselines, TD candidates & decision rules}
   %\VignetteEngine{knitr::rmarkdown}

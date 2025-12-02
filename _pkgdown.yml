@@ -73,7 +73,12 @@ articles:
 
   - title: "Advanced usage"
     contents:
-      - seasight-advanced  
+      - seasight-advanced
+
+  - title: "Seasonal adjustment in practice"
+    contents:
+      - seasight-sa-practice
+  
 
 authors:
   Philipp Wegmueller:
