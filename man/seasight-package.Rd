@@ -27,7 +27,7 @@ Useful links:
 
 }
 \author{
-\strong{Maintainer}: Philipp WegmC<ller \email{philipp.wegmueller@seco.admin.ch}
+\strong{Maintainer}: Philipp Wegmüller \email{philipp.wegmueller@seco.admin.ch}
 
 }
 \keyword{internal}
