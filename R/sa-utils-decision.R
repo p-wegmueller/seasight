@@ -46,6 +46,36 @@
   suppressWarnings(as.numeric(r$lb_p))
 }
 
+# --- UI consistency helpers ---------------------------------------------------
+
+# Apply a "seasonal-only" guard before rendering UI elements.
+#
+# Rationale: SEATS seasonal component is only defined for SEATS models.
+# If SEATS is selected but no seasonal component is available, showing
+# "ADJUST" without explanation is contradictory. We downgrade the
+# *display* call to BORDERLINE and surface a short note.
+.existence_call_ui <- function(res) {
+  stopifnot(inherits(res, "auto_seasonal_analysis"))
+  call_raw <- tryCatch(as.character(res$seasonality$overall$call_overall[1]),
+                       error = function(e) "\u2014")
+  br <- tryCatch(dplyr::slice(res$table, 1), error = function(e) NULL)
+  if (is.null(br) || !nrow(br)) {
+    return(list(call = call_raw, note = NULL))
+  }
+  eng <- as.character(br$engine %||% NA_character_)
+  seats_has <- if ("SEATS_has_seasonal" %in% names(br)) br$SEATS_has_seasonal else NA
+  
+  if (identical(eng, "seats") && identical(seats_has, FALSE) && identical(call_raw, "ADJUST")) {
+    return(list(
+      call = "BORDERLINE",
+      note = "SEATS was selected but no SEATS seasonal component is available; treat the evidence as borderline and consider switching to X-11 or revising the specification."
+    ))
+  }
+  
+  list(call = call_raw, note = NULL)
+}
+
+
 # --- decision logic ------------------------------------------------------------
 
 # Compose a high-level decision given the existence call and the best row.

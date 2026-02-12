@@ -389,8 +389,15 @@
 
 
 .seats_has_seasonal <- function(m) {
+  # IMPORTANT:
+  # - For X-11 models, a SEATS seasonal component is not defined.
+  # - Returning FALSE for non-SEATS engines leads to misleading UI
+  #   ("SEATS seasonal component: absent") even when SEATS wasn't used.
+  eng <- tryCatch(.engine_used(m), error = function(e) NA_character_)
+  if (!identical(eng, "seats")) return(NA)
   !inherits(try(seasonal::series(m, "seats.seasonal"), silent = TRUE), "try-error")
 }
+
 
 #' Build user-supplied calendar regressors (Genhol-style)
 #'

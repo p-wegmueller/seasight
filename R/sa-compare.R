@@ -63,7 +63,8 @@ sa_existence_card <- function(res) .build_existence_card(res)
 .build_existence_card <- function(res) {
   stopifnot(inherits(res, "auto_seasonal_analysis"))
   br   <- dplyr::slice(res$table, 1)
-  call <- tryCatch(as.character(res$seasonality$overall$call_overall[1]), error = function(e) "\u2014")
+  ui_call <- tryCatch(.existence_call_ui(res), error = function(e) list(call = "\u2014", note = NULL))
+  call <- ui_call$call
   
   # M7 interpretation (X-11 rule of thumb)
   m7_txt <- if (is.na(br$M7)) "n/a" else if (br$M7 < 0.90) "clear seasonality"
@@ -111,6 +112,10 @@ sa_existence_card <- function(res) .build_existence_card(res)
     # default
     "Evidence is mixed; consider visual diagnostics."
   )
+  
+  if (!is.null(ui_call$note) && nzchar(ui_call$note)) {
+    nuance <- paste0(nuance, " ", ui_call$note)
+  }
   
   htmltools::div(
     class = "card",

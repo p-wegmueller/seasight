@@ -12,6 +12,7 @@ sa_report_html(
   use_fivebest = TRUE,
   title = "Seasonal Adjustment Report",
   outfile = "sa_report.html",
+  file = NULL,
   png_width = 1400,
   png_height = 900,
   print_to_console = FALSE,

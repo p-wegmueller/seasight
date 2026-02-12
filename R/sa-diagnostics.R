@@ -206,7 +206,9 @@ sa_existence_call <- function(tbl,
 sa_copyable_call <- function(m, x_expr, xreg_expr = NA,
                              include_force = FALSE,
                              engine = c("auto","seats","x11")) {
-  stopifnot(inherits(m, "seas"), is.character(x_expr), length(x_expr) == 1)
+  stopifnot(inherits(m, "seas"), is.character(x_expr), length(x_expr) >= 1)
+  x_expr <- paste(x_expr, collapse = "\n")
+  
   engine <- match.arg(engine)
   
   cl <- seasonal::static(m)        # language: seas(...)

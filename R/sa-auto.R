@@ -399,6 +399,7 @@ auto_seasonal_analysis <- function(y,
   structure(
     list(
       best = best_fit,
+      y = y,
       table = ranked,
       specs_tried = sp_tried,
       frequency = freq,

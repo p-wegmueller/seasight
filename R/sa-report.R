@@ -18,6 +18,7 @@ sa_issue_report_html <- function(
     use_fivebest = TRUE,
     title = "Seasonal Adjustment Report",
     outfile = "sa_report.html",
+    file = NULL,
     png_width = 1400, png_height = 900,
     print_to_console = FALSE,
     print_which = c("new","current","both"),
@@ -118,25 +119,35 @@ sa_issue_report_html <- function(
   include_easter <- if (is.logical(include_easter)) { if (include_easter) "auto" else "off" } else { match.arg(include_easter) }
   engine         <- match.arg(engine)
   
+  if (!is.null(file)) outfile <- file
+  
   # --- run selector with the user's knobs ---
-  res <- auto_seasonal_analysis(
-    y = y,
-    use_fivebest = use_fivebest,
-    auto_outliers = TRUE,
-    include_easter = include_easter,
-    easter_len = easter_len,
-    transform_fun = "auto",
-    td_usertype = td_usertype,
-    td_candidates = td_candidates,
-    current_model = current_model,
-    include_history_top_n = 10,
-    outlier_types    = outlier_types,
-    outlier_method   = outlier_method,
-    outlier_critical = outlier_critical,
-    outlier_alpha    = outlier_alpha,
-    engine           = engine,
-    w_engine         = w_engine
-  )
+  if (inherits(y, "auto_seasonal_analysis")) {
+    res <- y
+    if (is.null(res$y)) {
+      stop("`sa_report_html()` was given an `auto_seasonal_analysis` object that does not contain the original `y`. Please update seasight (newer objects store `y`), or call `sa_report_html(y = <ts>)` instead.")
+    }
+    y <- res$y
+  } else {
+    res <- auto_seasonal_analysis(
+      y = y,
+      use_fivebest = use_fivebest,
+      auto_outliers = TRUE,
+      include_easter = include_easter,
+      easter_len = easter_len,
+      transform_fun = "auto",
+      td_usertype = td_usertype,
+      td_candidates = td_candidates,
+      current_model = current_model,
+      include_history_top_n = 10,
+      outlier_types    = outlier_types,
+      outlier_method   = outlier_method,
+      outlier_critical = outlier_critical,
+      outlier_alpha    = outlier_alpha,
+      engine           = engine,
+      w_engine         = w_engine
+    )
+  }
   
   # Consolidate ARIMA display string
   candidates <- .coalesce_arima_cols(res$table)
@@ -163,10 +174,13 @@ sa_issue_report_html <- function(
   )
   
   # Seasonality call & DNA rule
-  no_sa <- identical(res$seasonality$overall$call_overall[1], "DO_NOT_ADJUST")
+  ui_exist <- tryCatch(.existence_call_ui(res),
+                       error = function(e) list(call = res$seasonality$overall$call_overall[1], note = NULL))
+  no_sa <- identical(ui_exist$call, "DO_NOT_ADJUST")
+  
   dna   <- no_sa || .do_not_adjust(best_r)
   
-  y_expr <- deparse(substitute(y))
+  y_expr <- paste(deparse(substitute(y)), collapse = "\n")
   
   if (no_sa) {
     best_sa <- .as_ts(y)
@@ -496,7 +510,8 @@ document.addEventListener('click', function(e){
                                           htmltools::div(class="card",
                                                          htmltools::tags$h2("Summary"),
                                                          htmltools::div(class="kv",
-                                                                        htmltools::div(htmltools::HTML(paste0("<b>Seasonality (robust)</b>: <span class='pill'>", res$seasonality$overall$call_overall[1], "</span>"))),
+                                                                        htmltools::div(htmltools::HTML(paste0("<b>Seasonality (robust)</b>: <span class='pill'>", ui_exist$call, "</span>"))),
+                                                                        if (!is.null(ui_exist$note)) htmltools::div(htmltools::HTML(paste0("<b>Note</b>: ", htmltools::htmlEscape(ui_exist$note)))),
                                                                         if (!is.null(decision_reason)) htmltools::div(htmltools::HTML(paste0("<b>Reason</b>: ", decision_reason))),
                                                                         htmltools::HTML(paste0("<b>Best candidate (by score)</b>: ", if (no_sa) "n/a" else sprintf("<span class='mono nowrap'>%s</span>", htmltools::htmlEscape(best_arima_disp)))),
                                                                         htmltools::div(htmltools::HTML(paste0("<b>TD</b>: ",         if (no_sa) "n/a" else ifelse(best_r$with_td,"yes","no")))),
@@ -703,6 +718,7 @@ sa_report_html <- function(
     use_fivebest = TRUE,
     title = "Seasonal Adjustment Report",
     outfile = "sa_report.html",
+    file = NULL,
     png_width = 1400, png_height = 900,
     print_to_console = FALSE,
     print_which = c("new", "current", "both"),
@@ -715,6 +731,7 @@ sa_report_html <- function(
     outlier_critical = 4,
     outlier_alpha    = NULL
 ) {
+  if (!is.null(file)) outfile <- file
   sa_issue_report_html(
     y = y,
     current_model = current_model,
