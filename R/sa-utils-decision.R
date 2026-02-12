@@ -1,5 +1,5 @@
 # =============================================================================
-# sa-utils-decision.R — unified decision + rendering helpers (internal)
+# sa-utils-decision.R unified decision + rendering helpers (internal)
 # =============================================================================
 
 # --- small utilities -----------------------------------------------------------
@@ -54,7 +54,7 @@
 # has_current: whether there is an incumbent model to fall back to
 .compose_decision <- function(existence, best, has_current,
                               alpha_lb = 0.05, alpha_qs = 0.10) {
-  # If no material seasonality on the original series → do not adjust at all.
+  # If no material seasonality on the original series \u2192 do not adjust at all.
   if (identical(existence, "DO_NOT_ADJUST")) {
     return(list(
       decision = "DO_NOT_ADJUST",
@@ -78,7 +78,7 @@
   if (is.finite(lb_p) && lb_p < alpha_lb) {
     return(list(
       decision = if (isTRUE(has_current)) "KEEP_CURRENT_MODEL" else "DO_NOT_ADJUST",
-      reason   = "Best candidate fails residual autocorrelation (Ljung–Box)."
+      reason   = "Best candidate fails residual autocorrelation (Ljung-Box)."
     ))
   }
   # Residual seasonality on SA blocks switching (missing QS should not block)
@@ -109,7 +109,7 @@
   if (is.character(a) && nzchar(a)) return(a)
   if (is.character(s) && grepl("^\\(", s)) return(s)
   if (isTRUE(airline) || identical(airline, 1)) return("(0 1 1)(0 1 1)")
-  "—"
+  "\u2014"
 }
 
 .coalesce_arima_cols <- function(df) {
@@ -130,7 +130,7 @@
 }
 
 
-# --- “best row” extraction & summary ------------------------------------------
+# --- "best row" extraction & summary ------------------------------------------
 
 .extract_best_row <- function(tbl) {
   if (is.null(tbl) || !nrow(tbl)) return(NULL)

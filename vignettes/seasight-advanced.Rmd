@@ -119,85 +119,100 @@ sa_top_candidates_table(
 * ⭐ rows highlight the **current** model in blue (even if it is not in the top-5).
 * The airline model ARIMA(0 1 1)(0 1 1) is appended in red if available.
 
-## 2. Providing trading-day / calendar candidates
+## 2. Providing calendar regressors (trading days, moving holidays)
 
-Eurostat guidelines recommend that calendar effects (working-day, leap-year,
-Easter, etc.) be treated explicitly, particularly for STS indicators and
+Eurostat guidelines recommend treating calendar effects (working-day, leap-year,
+Easter, moving holidays, etc.) explicitly—especially for STS indicators and
 National Accounts.([European Commission][1])
 
-In many production systems, calendar regressors are pre-computed and stored in
-databases. `seasight` can consume these via the `td_candidates` argument.
+`seasight` follows a simple rule:
 
-The idea is:
+*You provide candidate regressors; `auto_seasonal_analysis()` compares “no‑xreg”
+against “with‑xreg” candidates and records what won.*
 
-* You provide a **named list** of candidate regressors (typically `ts` objects).
-* `auto_seasonal_analysis()` tries models *with* and *without* each TD candidate.
-* The winning model’s TD choice (and its significance) is visible in `res$table`
-  and in the HTML report.
+This is done via the `td_candidates` argument: a **named list** of `ts` (or
+ts-boxable) regressors aligned to `y`.
 
-### 2.1 A simple length-of-month regressor (for illustration)
+### 2.1 Precomputed regressors (example: length-of-month)
 
-For a proper TD regressor you would use working-day counts by weekday.
-Here we just construct a very simple **length-of-month** regressor to
-illustrate the mechanics.
+For a proper trading-day setup you’d typically use weekday counts or contrasts.
+Here we build a simple **length-of-month** regressor just to show the mechanics.
 
 ```{r td-length-of-month}
-# Helper: number of days in the month of a given Date
 days_in_month <- function(date) {
-  # first of this month
   d0 <- as.Date(format(date, "%Y-%m-01"))
-  # first of next month
   d1 <- seq(d0, by = "month", length.out = 2)[2]
   as.integer(d1 - d0)
 }
 
-# Construct dates for AirPassengers
-dates <- seq(
-  from = as.Date("1949-01-01"),
-  by   = "month",
-  length.out = length(x)
-)
-
+dates <- seq(from = as.Date("1949-01-01"), by = "month", length.out = length(x))
 ndays <- vapply(dates, days_in_month, integer(1))
 
-# Centre the regressor (common in TD practice)
-len_centered <- ndays - mean(ndays)
-
-td_len <- ts(
-  len_centered,
-  start     = start(x),
-  frequency = frequency(x)
-)
-
+# centering is common in calendar regressors
+td_len <- ts(ndays - mean(ndays), start = start(x), frequency = frequency(x))
 plot(td_len, main = "Centered length-of-month regressor")
 ```
 
-We now pass this as a **single** TD candidate:
+Run the grid with this regressor as a candidate:
 
 ```{r auto-with-td}
 res_td <- auto_seasonal_analysis(
-  y             = x,
-  current_model = m_current,
-  td_candidates = list(lenmonth = td_len),
-  td_usertype   = "td",
+  y              = x,
+  current_model  = m_current,
+  td_candidates  = list(lenmonth = td_len),
+  td_usertype    = "td",
   include_easter = "auto",
-  engine        = "auto"
+  engine         = "auto"
 )
 
 head(res_td$table)
 ```
 
-You should see columns like:
+Key columns:
 
-* `with_td` – whether the TD regressor is included,
-* `td_label` / `td_name` – which regressor is used,
-* `td_p` – p-value (minimum over TD coefficients if several).
+* `with_td` – whether a calendar regressor is included,
+* `td_name` – which regressor (list name) was used,
+* `td_p` and `td_sig` – regressor significance diagnostics (min p-value over TD terms).
 
-In a real system you might pass e.g.
+### 2.2 Moving-holiday pulses via `build_user_xreg()` (Genhol-style)
 
-* a working-day regressor with six weekday dummies,
-* a “trading-day contrast” regressor (e.g. 6 contrasts + length-of-month),
-* or decompositions of public-holiday calendars.
+If you have a moving holiday calendar (Diwali, Ramadan, Carnival, …) you can build
+a pulse regressor via `seasonal::genhol()` using `build_user_xreg()`:
+
+```{r td-genhol, eval = FALSE}
+diwali_dates <- as.Date(c(
+  "2018-11-07","2019-10-27","2020-11-14","2021-11-04",
+  "2022-10-24","2023-11-12","2024-11-01"
+))
+
+td_hol <- build_user_xreg(
+  y = x,
+  holidays = list(list(name = "diwali", dates = diwali_dates, start = -1, end = 1)),
+  td_usertype = "holiday"
+)
+
+res_hol <- auto_seasonal_analysis(
+  y             = x,
+  current_model = m_current,
+  td_candidates = td_hol,
+  include_easter = "auto",
+  engine        = "auto"
+)
+```
+
+### 2.3 SEATS and “future” xreg values (why padding exists)
+
+When using **SEATS**, X-13 typically relies on an internal forecast horizon
+(often ~3 years). If `xreg` is used, X-13 requires those regressor values to
+exist over the same horizon.
+
+`seasight` therefore pads **pulse-type holiday regressors** (like `genhol()` output)
+with zeros into the forecast horizon automatically. This is correct for pulses.
+
+For other calendar regressors (e.g. trading-day counts), the calendar is known
+in advance—so you should ideally provide future values yourself. If you cannot,
+consider running `engine = "x11"` for those candidates.
+
 
 ## 3. Decision rules: existence of seasonality & switching models
 

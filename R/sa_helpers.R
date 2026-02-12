@@ -17,7 +17,7 @@
   as.character(out)
 }
 
-# Robust Ljung–Box p-value on model residuals (no summary() scraping)
+# Robust Ljung-Box p-value on model residuals (no summary() scraping)
 .lb_p <- function(m, lag = NULL, adjust_df = TRUE) {
   e <- try(stats::residuals(m), silent = TRUE)
   if (inherits(e, "try-error")) return(NA_real_)
@@ -93,8 +93,23 @@
 }
 
 .has_seats_model_switch_msg <- function(m) {
-  any(grepl("Model used for SEATS is different",
-            capture.output(suppressMessages(summary(m))), fixed = TRUE))
+  # Robust: must never crash, even if summary()/qs() is broken for this model.
+  tryCatch({
+    out <- tryCatch(
+      utils::capture.output(suppressMessages(summary(m))),
+      error = function(e) character(0)
+    )
+    
+    if (!length(out)) return(NA)
+    
+    # seasonal has used both phrasings depending on version/output
+    any(
+      grepl("Model used in SEATS is different", out, fixed = TRUE) |
+        grepl("Model used for SEATS is different", out, fixed = TRUE)
+    )
+  }, error = function(e) {
+    NA
+  })
 }
 
 # QS on the ORIGINAL series, tested with both engines
@@ -187,12 +202,14 @@
   tibble::tibble(var = nm, p = as.numeric(p))
 }
 
-# Fit one spec, returning 1–2 models (engine seats/x11/auto is respected)
+# Fit one spec, returning 1-2 models (engine seats/x11/auto is respected)
 .fit_spec <- function(y, arima_model, transform_fun,
                       auto_outliers = TRUE,
                       include_easter_mode = c("auto","always","off"),
                       easter_len = 15L,
-                      td_xreg = NULL, td_usertype = "td",
+                      td_xreg = NULL,
+                      td_usertype = "td",
+                      td_name = NA_character_,
                       outlier_types    = c("AO","LS","TC"),
                       outlier_method   = "AddOne",
                       outlier_critical = 4,
@@ -201,10 +218,17 @@
   include_easter_mode <- match.arg(include_easter_mode)
   engine <- match.arg(engine)
   
-  # regression variables (Easter handling)
+  # ---- y must be a clean ts -------------------------------------------------
+  y <- tryCatch(tsbox::ts_ts(y), error = function(e) NULL)
+  if (is.null(y) || !inherits(y, "ts")) {
+    stop("`.fit_spec()` requires `y` to be convertible to a base `ts`.")
+  }
+  freq <- stats::frequency(y)
+  
+  # ---- regression.variables (Easter) ----------------------------------------
   regvars <- character(0)
   if (include_easter_mode %in% c("auto","always")) {
-    regvars <- sprintf("easter[%d]", as.integer(easter_len))  # X-13 will drop if not useful
+    regvars <- sprintf("easter[%d]", as.integer(easter_len))
   }
   
   call_args <- list(
@@ -214,11 +238,48 @@
     arima.model        = arima_model
   )
   
-  if (length(regvars)) call_args$regression.variables <- regvars
-  if (!is.null(td_xreg)) {
-    call_args$xreg <- td_xreg
-    call_args$regression.usertype <- td_usertype
+  # X-13: auto transform fails with nonpositive values
+  if (identical(call_args$transform.function, "auto")) {
+    yy <- as.numeric(y)
+    if (any(!is.finite(yy)) || any(yy <= 0, na.rm = TRUE)) {
+      call_args$transform.function <- "none"
+    }
   }
+  
+  if (length(regvars)) call_args$regression.variables <- regvars
+  
+  # ---- user xreg: align to y and build mts ----------------------------------
+  td_used <- FALSE
+  if (!is.null(td_xreg)) {
+    xr <- tryCatch(tsbox::ts_ts(td_xreg), error = function(e) NULL)
+    
+    if (is.null(xr) || !inherits(xr, "ts")) {
+      warning("Skipping td_xreg: not ts-boxable / not a ts.")
+    } else if (stats::frequency(xr) != freq) {
+      warning(sprintf("Skipping td_xreg: frequency mismatch (xreg=%s, y=%s).",
+                      stats::frequency(xr), freq))
+    } else {
+      xr <- tryCatch(stats::window(xr, start = stats::start(y), end = stats::end(y)),
+                     error = function(e) NULL)
+      
+      # IMPORTANT: for multicol xreg, use NROW not length()
+      if (is.null(xr) || NROW(xr) != length(y)) {
+        warning("Skipping td_xreg: could not align to y (length/start/end mismatch).")
+      } else {
+        xmat <- as.matrix(xr)  # preserves multicol
+        if (is.null(colnames(xmat))) {
+          colnames(xmat) <- paste0("xreg", seq_len(ncol(xmat)))
+        }
+        xreg_y <- stats::ts(xmat, start = stats::start(y), frequency = freq)
+        
+        call_args$xreg <- xreg_y
+        call_args$regression.usertype <- rep(td_usertype, ncol(xreg_y))
+        td_used <- TRUE
+      }
+    }
+  }
+  
+  # ---- outliers --------------------------------------------------------------
   if (isTRUE(auto_outliers)) {
     call_args$outlier          <- ""
     call_args$outlier.types    <- outlier_types
@@ -226,34 +287,209 @@
     call_args$outlier.critical <- outlier_critical
   }
   
-  if (engine == "x11") call_args$x11 <- "" else if (engine == "seats") call_args$seats <- ""
+  # ---- helper: run seas safely ----------------------------------------------
+  .last_err <- NULL
+  .run_try <- function(args) {
+    z <- try(do.call(seasonal::seas, args), silent = TRUE)
+    if (inherits(z, "try-error")) {
+      .last_err <<- as.character(z)
+      return(NULL)
+    }
+    z
+  }
+  
+  # ---- SEATS padding: extend xreg into forecast horizon ----------------------
+  # X-13/SEATS often forecasts ~3 years; user xreg must exist for that horizon.
+  # Default strategy:
+  # - pulse/moving-holiday-like usertypes: pad with 0
+  # - otherwise: repeat last full year as pragmatic default
+  .extend_xreg_for_seats <- function(xreg_ts, lead_n, usertype) {
+    if (is.null(xreg_ts) || lead_n <= 0) return(xreg_ts)
+    
+    x <- as.matrix(xreg_ts)
+    if (NROW(x) < 1L) return(xreg_ts)
+    
+    ut <- tolower(usertype %||% "")
+    is_pulse <- grepl("holiday|easter|diwali|ramadan|christmas|cny|lunar|pulse", ut)
+    
+    if (is_pulse) {
+      pad <- matrix(0, nrow = lead_n, ncol = ncol(x))
+    } else {
+      k <- min(stats::frequency(xreg_ts), NROW(x))
+      base <- x[(NROW(x) - k + 1L):NROW(x), , drop = FALSE]
+      pad <- base[rep(seq_len(NROW(base)), length.out = lead_n), , drop = FALSE]
+    }
+    
+    colnames(pad) <- colnames(x)
+    x2 <- rbind(x, pad)
+    stats::ts(x2, start = stats::start(xreg_ts), frequency = stats::frequency(xreg_ts))
+  }
+  
+  # ---- build first attempt args (explicit engine choice) ---------------------
+  make_args_for_engine <- function(engine_choice) {
+    args <- call_args
+    if (engine_choice == "x11") {
+      args$x11 <- ""
+    } else if (engine_choice == "seats") {
+      args$seats <- ""
+      args$seats.noadmiss <- "no"
+    }
+    args
+  }
   
   out <- list()
   
-  run1 <- try(do.call(seasonal::seas, call_args), silent = TRUE)
-  if (!inherits(run1, "try-error")) {
-    out <- c(out, list(list(model = run1,
-                            with_td = !is.null(td_xreg),
-                            with_easter = length(regvars) > 0)))
-  }
+  # Decide attempt order
+  attempt_engines <- switch(
+    engine,
+    seats = "seats",
+    x11   = "x11",
+    auto  = c("seats", "x11")
+  )
   
-  if (engine == "auto") {
-    alt_args <- call_args
-    if ("x11" %in% names(alt_args)) { alt_args$x11 <- NULL; alt_args$seats <- "" }
-    else                            { alt_args$seats <- NULL; alt_args$x11 <- "" }
-    run2 <- try(do.call(seasonal::seas, alt_args), silent = TRUE)
-    if (!inherits(run2, "try-error")) {
-      out <- c(out, list(list(model = run2,
-                              with_td = !is.null(td_xreg),
-                              with_easter = length(regvars) > 0)))
+  for (eng_try in attempt_engines) {
+    args1 <- make_args_for_engine(eng_try)
+    
+    # only pad when attempting SEATS (not X11)
+    if (td_used && identical(eng_try, "seats")) {
+      lead_n <- as.integer(3L * freq)
+      args1$xreg <- .extend_xreg_for_seats(args1$xreg, lead_n = lead_n, usertype = td_usertype)
+      args1$forecast.maxlead <- lead_n
+      args1$forecast.maxback <- 0L
     }
+    
+    run1 <- .run_try(args1)
+    
+    # Fallback 1: drop usertype tokens (some X-13 builds are picky)
+    if (is.null(run1) && td_used) {
+      alt1 <- args1
+      alt1$regression.usertype <- NULL
+      run1 <- .run_try(alt1)
+    }
+    
+    # Fallback 2: conservative token "td"
+    if (is.null(run1) && td_used) {
+      alt2 <- args1
+      alt2$regression.usertype <- rep("td", ncol(args1$xreg %||% matrix(NA_real_, 0, 1)))
+      run1 <- .run_try(alt2)
+    }
+    
+    out <- c(out, list(list(
+      model       = run1,
+      with_td     = td_used,
+      td_name     = td_name %||% NA_character_,
+      with_easter = length(regvars) > 0,
+      engine      = eng_try,
+      err         = if (is.null(run1)) (.last_err %||% "unknown error") else NA_character_
+    )))
   }
   
   out
 }
 
+
 .seats_has_seasonal <- function(m) {
   !inherits(try(seasonal::series(m, "seats.seasonal"), silent = TRUE), "try-error")
+}
+
+#' Build user-supplied calendar regressors (Genhol-style)
+#'
+#' Helper to create *generic* calendar regressors without relying on any
+#' country-specific datasets shipped with the package.
+#'
+#' Supports:
+#' - Precomputed regressors (`td_candidates`): named list of ts-boxable series
+#' - Moving-holiday regressors (`holidays`): built via [seasonal::genhol()]
+#'
+#' The output is directly consumable by [auto_seasonal_analysis()] via its
+#' `td_candidates` argument.
+#'
+#' @param y A `ts` (or ts-boxable) target series used for alignment.
+#' @param td_candidates Optional named list of precomputed regressors (ts-boxable).
+#' @param holidays Optional list defining moving-holiday regressors. Each element may be:
+#'   - a `Date` vector (holiday dates), or
+#'   - a list with fields `dates` (Date), `start` (int), `end` (int),
+#'     `center` (chr), `name` (chr)
+#'   Windows are in days relative to the holiday date. Defaults: `start=-7`, `end=0`.
+#' @param frequency Optional frequency to use for holiday regressors (defaults to `frequency(y)`).
+#' @param td_usertype X-13 usertype label for *all* returned regressors (default "holiday").
+#' @param default_center Default centering for holiday regressors.
+#'
+#' @return A named list of `ts` regressors aligned to `y`. Attribute `td_usertype`
+#'   is attached for downstream use.
+#' @export
+build_user_xreg <- function(y,
+                            td_candidates = NULL,
+                            holidays = NULL,
+                            frequency = NULL,
+                            td_usertype = "holiday",
+                            default_center = c("calendar","mean","none")) {
+  y <- .as_ts(y)
+  default_center <- match.arg(default_center)
+  if (is.null(frequency)) frequency <- stats::frequency(y)
+  
+  out <- list()
+  
+  # 1) Precomputed regressors -------------------------------------------------
+  if (!is.null(td_candidates)) {
+    if (!is.list(td_candidates)) stop("`td_candidates` must be a list.")
+    out <- c(out, td_candidates)
+  }
+  
+  # 2) Moving-holiday regressors (Genhol-style) ------------------------------
+  if (!is.null(holidays)) {
+    if (!is.list(holidays)) holidays <- list(holidays)
+    
+    for (i in seq_along(holidays)) {
+      h <- holidays[[i]]
+      
+      # Allow bare Date vector
+      if (inherits(h, "Date")) h <- list(dates = h)
+      if (!is.list(h)) {
+        warning(sprintf("Skipping holidays[[%d]]: not a Date vector or list.", i))
+        next
+      }
+      
+      dates <- h$dates %||% h$date %||% NULL
+      if (is.null(dates) || !inherits(dates, "Date")) {
+        warning(sprintf("Skipping holidays[[%d]]: missing `dates` (Date vector).", i))
+        next
+      }
+      
+      start  <- as.integer(h$start %||% -7L)
+      end    <- as.integer(h$end   %||%  0L)
+      center <- as.character(h$center %||% default_center)
+      name   <- as.character(h$name %||% paste0("hol", i))
+      
+      xr <- tryCatch(
+        seasonal::genhol(
+          x = dates,
+          start = start,
+          end = end,
+          frequency = as.integer(frequency),
+          center = center
+        ),
+        error = function(e) {
+          warning(sprintf("Skipping holiday '%s': genhol() failed (%s).", name, e$message))
+          NULL
+        }
+      )
+      if (is.null(xr)) next
+      
+      # Align to y (frequency and window). Drop if incompatible.
+      xr <- .align_xreg_to_y_fill0(xr, y, fill = 0)
+      if (is.null(xr)) {
+        warning(sprintf("Skipping holiday '%s': could not align to `y`.", name))
+        next
+      }
+      
+      out[[name]] <- xr
+    }
+  }
+  
+  # Final normalization (names, alignment checks) ----------------------------
+  out <- if (length(out)) .normalize_td_candidates(out, y = y, td_usertype = td_usertype) else NULL
+  out
 }
 
 # Robust ARIMA string extraction (no summary() scraping)
@@ -351,6 +587,35 @@
                        end = min(stats::end(a), stats::end(b)))
   list(a = tsbox::ts_pick(a, ix), b = tsbox::ts_pick(b, ix))
 }
+# Align an xreg ts to y and fill missing periods with `fill` (default 0).
+# Keeps column names and returns an mts with the same span as y.
+# Used for user-supplied calendar regressors (e.g., genhol()) where pulses
+# may lie outside the sample window.
+.align_xreg_to_y_fill0 <- function(xreg, y, fill = 0) {
+  y <- tryCatch(tsbox::ts_ts(y), error = function(e) NULL)
+  xr <- tryCatch(tsbox::ts_ts(xreg), error = function(e) NULL)
+
+  if (is.null(y) || !inherits(y, "ts")) return(NULL)
+  if (is.null(xr) || !inherits(xr, "ts")) return(NULL)
+
+  fy <- stats::frequency(y)
+  if (stats::frequency(xr) != fy) return(NULL)
+
+  # target timeline (robust against floating point quirks)
+  ty <- round(stats::time(y), 8)
+  tx <- round(stats::time(xr), 8)
+
+  X  <- as.matrix(xr)
+  k  <- ncol(X)
+  out <- matrix(fill, nrow = length(y), ncol = k)
+  colnames(out) <- colnames(X)
+
+  pos <- match(tx, ty)
+  ok  <- which(!is.na(pos))
+  if (length(ok)) out[pos[ok], ] <- X[ok, , drop = FALSE]
+
+  stats::ts(out, start = stats::start(y), frequency = fy)
+}
 
 .align_pair <- function(x, y) {
   if (is.null(x) || is.null(y)) return(NULL)
@@ -433,12 +698,12 @@ seasonality_summary <- function(tbl, majority = 0.6) {
 }
 
 # tiny formatters
-.fmtP <- function(p) ifelse(is.na(p), "—", ifelse(p < 0.001, "<0.001", sprintf("%.3f", p)))
-.num  <- function(x, d = 2) ifelse(is.na(x), "—", sprintf(paste0("%.", d, "f"), x))
+.fmtP <- function(p) ifelse(is.na(p), "\u2014", ifelse(p < 0.001, "<0.001", sprintf("%.3f", p)))
+.num  <- function(x, d = 2) ifelse(is.na(x), "\u2014", sprintf(paste0("%.", d, "f"), x))
 .pct  <- function(x, digits = 1) ifelse(is.na(x), "NA", sprintf("%.*f%%", digits, x))
 .num_safe <- function(x, d = 2) {
   y <- suppressWarnings(as.numeric(x))
-  ifelse(is.finite(y), sprintf(paste0("%.", d, "f"), y), "—")
+  ifelse(is.finite(y), sprintf(paste0("%.", d, "f"), y), "\u2014")
 }
 
 # --- INTERNAL: normalise TD candidates ----------------------------------------
@@ -494,11 +759,11 @@ seasonality_summary <- function(tbl, majority = 0.6) {
 }
 
 .flagP <- function(p, threshold = 0.05) {
-  if (is.na(p)) return("—")
+  if (is.na(p)) return("\u2014")
   if (p < threshold) {
-    sprintf("<span style='color:#b91c1c;font-weight:600;'>❌ %s</span>", .fmtP(p))
+    sprintf("<span style='color:#b91c1c;font-weight:600;'>\u274C %s</span>", .fmtP(p))
   } else {
-    sprintf("<span style='color:#065f46;font-weight:600;'>✅ %s</span>", .fmtP(p))
+    sprintf("<span style='color:#065f46;font-weight:600;'>\u2705 %s</span>", .fmtP(p))
   }
 }
 
@@ -548,10 +813,10 @@ seasonality_summary <- function(tbl, majority = 0.6) {
   }
   
   tf <- tolower(tf)
-  if (is.na(tf) || tf == "") return(if (!is.na(fallback)) tolower(fallback) else "—")
+  if (is.na(tf) || tf == "") return(if (!is.na(fallback)) tolower(fallback) else "\u2014")
   if (tf == "auto" && !is.na(fallback)) return(tolower(fallback))
   if (tf %in% c("log", "none")) return(tf)
-  if (grepl("iofile|\\.html$|[\\\\/]", tf)) return(if (!is.na(fallback)) tolower(fallback) else "—")
+  if (grepl("iofile|\\.html$|[\\\\/]", tf)) return(if (!is.na(fallback)) tolower(fallback) else "\u2014")
   tf
 }
 
@@ -709,4 +974,104 @@ seasonality_summary <- function(tbl, majority = 0.6) {
 .w <- function(lst, nm, default = 0) {
   v <- tryCatch(as.numeric(if (!is.null(lst)) lst[[nm]] else NA_real_), error = function(e) NA_real_)
   if (length(v) != 1L || !is.finite(v)) default else v
+}
+
+#' Build user-supplied calendar regressors (Genhol-style)
+#'
+#' This helper lets users provide *generic* calendar regressors without relying
+#' on any country-specific datasets shipped with the package.
+#'
+#' Supports:
+#' - Precomputed regressors (`td_candidates`): named list of `ts`-boxable series
+#' - Moving-holiday regressors (`holidays`): built via [seasonal::genhol()]
+#'
+#' The output is directly consumable by [auto_seasonal_analysis()] via its
+#' `td_candidates` argument.
+#'
+#' @param y A `ts` (or ts-boxable) target series used for alignment.
+#' @param td_candidates Optional named list of precomputed regressors (ts-boxable).
+#' @param holidays Optional list defining moving-holiday regressors. Each element may be:
+#'   - a `Date` vector (holiday dates), or
+#'   - a list with fields `dates` (Date), `start` (int), `end` (int), `center` (chr), `name` (chr)
+#'   Windows are in days relative to the holiday date. Defaults: `start=-7`, `end=0`.
+#' @param frequency Optional frequency to use for holiday regressors (defaults to `frequency(y)`).
+#' @param td_usertype X-13 usertype label for *all* returned regressors (default `"holiday"`).
+#' @param default_center Default centering for holiday regressors (default `"calendar"`).
+#'
+#' @return A named list of `ts` regressors aligned to `y`. Attribute `td_usertype`
+#'   is attached for downstream use.
+#' @export
+build_user_xreg <- function(y,
+                            td_candidates = NULL,
+                            holidays = NULL,
+                            frequency = NULL,
+                            td_usertype = "holiday",
+                            default_center = c("calendar","mean","none")) {
+  y <- .as_ts(y)
+  default_center <- match.arg(default_center)
+  if (is.null(frequency)) frequency <- stats::frequency(y)
+  
+  out <- list()
+  
+  # 1) Precomputed regressors -------------------------------------------------
+  if (!is.null(td_candidates)) {
+    if (!is.list(td_candidates)) stop("`td_candidates` must be a list.")
+    out <- c(out, td_candidates)
+  }
+  
+  # 2) Moving-holiday regressors (Genhol-style) ------------------------------
+  if (!is.null(holidays)) {
+    if (!is.list(holidays)) holidays <- list(holidays)
+    
+    for (i in seq_along(holidays)) {
+      h <- holidays[[i]]
+      
+      # Allow bare Date vector
+      if (inherits(h, "Date")) h <- list(dates = h)
+      
+      if (!is.list(h)) {
+        warning(sprintf("Skipping holidays[[%d]]: not a Date vector or list.", i))
+        next
+      }
+      
+      dates <- h$dates %||% h$date %||% NULL
+      if (is.null(dates) || !inherits(dates, "Date")) {
+        warning(sprintf("Skipping holidays[[%d]]: missing `dates` (Date vector).", i))
+        next
+      }
+      
+      start  <- as.integer(h$start %||% -7L)
+      end    <- as.integer(h$end   %||%  0L)
+      center <- as.character(h$center %||% default_center)
+      name   <- as.character(h$name %||% paste0("hol", i))
+      
+      xr <- tryCatch(
+        seasonal::genhol(
+          x = dates,
+          start = start,
+          end = end,
+          frequency = as.integer(frequency),
+          center = center
+        ),
+        error = function(e) {
+          warning(sprintf("Skipping holiday '%s': genhol() failed (%s).", name, e$message))
+          NULL
+        }
+      )
+      if (is.null(xr)) next
+      
+      # Align to y (frequency and window). Drop if incompatible.
+      xr <- .align_xreg_to_y_fill0(xr, y, fill = 0)
+      if (is.null(xr)) {
+        warning(sprintf("Skipping holiday '%s': could not align to `y`.", name))
+        next
+      }
+      
+      out[[name]] <- xr
+    }
+  }
+  
+  # Final normalization (names, alignment checks)
+  out <- if (length(out)) .normalize_td_candidates(out, y = y, td_usertype = td_usertype) else NULL
+  out
 }

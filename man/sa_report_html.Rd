@@ -39,7 +39,7 @@ trading-day regressors are used (default \code{"td"}).}
 \item{td_candidates}{Optional named list of trading-day candidate regressors
 (e.g. \code{list(wd = wd.m, wd1 = wd1.m)}), each aligned with \code{y}.}
 
-\item{use_fivebest}{Logical. If \code{TRUE}, include the “five best” automatic
+\item{use_fivebest}{Logical. If \code{TRUE}, include the "five best" automatic
 specs in the candidate grid.}
 
 \item{title}{Title of the report shown in the HTML page.}
@@ -94,9 +94,9 @@ copy-pasteable \code{seas()} calls.
 Notes:
 \itemize{
 \item If the provided \emph{current} specification equals the selected \emph{best} model,
-the report omits the “Alternative model” comparison section.
-\item The “Top candidates” table starts with the best model and always includes
-the current model (flagged with ⭐) when one is supplied.
+the report omits the "Alternative model" comparison section.
+\item The "Top candidates" table starts with the best model and always includes
+the current model (flagged with a star ★) when one is supplied.
 }
 }
 \examples{

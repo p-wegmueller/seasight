@@ -5,7 +5,7 @@
 #'   - min_qs_p: minimum acceptable QS p-value on SA (overall) for the best model
 #'   - max_dist_sa_mult: allow SA L1 distance up to this multiple of the cross-candidate median
 #'   - min_corr_seas: minimum correlation of seasonal components (vs. incumbent)
-#'   - min_lb_p: minimum acceptable Ljung–Box p-value on residuals
+#'   - min_lb_p: minimum acceptable Ljung-Box p-value on residuals
 #' @return One of "CHANGE_TO_NEW_MODEL" or "KEEP_CURRENT_MODEL".
 #' @export
 sa_should_switch <- function(res,
@@ -29,7 +29,7 @@ sa_should_switch <- function(res,
   # QS on SA (overall): higher is better
   ok_qs <- is.finite(br$QS_p) && br$QS_p >= thr_qs
   
-  # Ljung–Box: if missing (rare), do not block a switch
+  # Ljung-Box: if missing (rare), do not block a switch
   ok_lb <- if (is.finite(br$LB_p)) br$LB_p >= thr_lb else TRUE
   
   # SA distance vs median: ignore criterion if no distances exist or current distance is NA
@@ -63,7 +63,7 @@ sa_existence_card <- function(res) .build_existence_card(res)
 .build_existence_card <- function(res) {
   stopifnot(inherits(res, "auto_seasonal_analysis"))
   br   <- dplyr::slice(res$table, 1)
-  call <- tryCatch(as.character(res$seasonality$overall$call_overall[1]), error = function(e) "—")
+  call <- tryCatch(as.character(res$seasonality$overall$call_overall[1]), error = function(e) "\u2014")
   
   # M7 interpretation (X-11 rule of thumb)
   m7_txt <- if (is.na(br$M7)) "n/a" else if (br$M7 < 0.90) "clear seasonality"
@@ -83,20 +83,20 @@ sa_existence_card <- function(res) .build_existence_card(res)
   # One-sentence conclusion
   lead <- htmltools::HTML(
     paste0("<b>Existence of seasonality:</b> <span class='pill'>", call,
-           "</span> — based on IDS, M7 and QS on the original series.")
+           "</span> \u2014 based on IDS, M7 and QS on the original series.")
   )
   
   bullets <- htmltools::tags$ul(
     htmltools::tags$li(htmltools::HTML(
-      paste0("<b>IDS (ONS ‘identifiable seasonality’)</b>: ", ids_txt, ".")
+      paste0("<b>IDS (ONS 'identifiable seasonality')</b>: ", ids_txt, ".")
     )),
     htmltools::tags$li(htmltools::HTML(
-      paste0("<b>M7 (X-11)</b>: ", .num(br$M7, 3), " → ", m7_txt, ".")
+      paste0("<b>M7 (X-11)</b>: ", .num(br$M7, 3), " \u2192 ", m7_txt, ".")
     )),
     htmltools::tags$li(htmltools::HTML(
       paste0("<b>QS on original</b>: X-11 p = ", .fmtP(br$QSori_p_x11),
              ", SEATS p = ", .fmtP(br$QSori_p_seats),
-             " → overall = ", .fmtP(qso_min), ".")
+             " \u2192 overall = ", .fmtP(qso_min), ".")
     )),
     htmltools::tags$li(htmltools::HTML(
       paste0("<b>SEATS seasonal component</b>: ", seats_txt, ".")
@@ -185,24 +185,24 @@ sa_existence_card <- function(res) .build_existence_card(res)
     )
   }
   
-  qs_prev   <- if (!is.null(prev)) .fmtP(.qs_overall_on_SA(prev)) else "—"
+  qs_prev   <- if (!is.null(prev)) .fmtP(.qs_overall_on_SA(prev)) else "\u2014"
   qs_best   <- .fmtP(.qs_overall_on_SA(best))
-  lb_prev   <- if (!is.null(prev)) .fmtP(.lb_p(prev)) else "—"
+  lb_prev   <- if (!is.null(prev)) .fmtP(.lb_p(prev)) else "\u2014"
   lb_best   <- .fmtP(.lb_p(best))
-  sh_prev   <- if (!is.null(prev)) .num(.shapiro_stat(prev), 2) else "—"
+  sh_prev   <- if (!is.null(prev)) .num(.shapiro_stat(prev), 2) else "\u2014"
   sh_best   <- .num(.shapiro_stat(best), 2)
-  tf_prev   <- if (!is.null(prev)) as.character(.transform_label(prev)) else "—"
+  tf_prev   <- if (!is.null(prev)) as.character(.transform_label(prev)) else "\u2014"
   tf_best   <- as.character(.transform_label(best))
-  aicc_prev <- if (!is.null(prev)) .num(tryCatch(.aicc(prev), error = function(e) NA_real_), 2) else "—"
+  aicc_prev <- if (!is.null(prev)) .num(tryCatch(.aicc(prev), error = function(e) NA_real_), 2) else "\u2014"
   aicc_best <- .num(tryCatch(.aicc(best), error = function(e) NA_real_), 2)
-  n_prev    <- if (!is.null(prev)) as.character(.obs_n(prev)) else "—"
+  n_prev    <- if (!is.null(prev)) as.character(.obs_n(prev)) else "\u2014"
   n_best    <- as.character(.obs_n(best))
-  ar_prev   <- if (!is.null(prev)) htmltools::htmlEscape(.arima_string(prev)) else "—"
+  ar_prev   <- if (!is.null(prev)) htmltools::htmlEscape(.arima_string(prev)) else "\u2014"
   ar_best   <- htmltools::htmlEscape(.arima_string(best))
   
   rows <- c(rows, list(
     stat_row("QS (p val.)",        qs_prev,   qs_best),
-    stat_row("Box–Ljung (p val.)", lb_prev,   lb_best),
+    stat_row("Box-Ljung (p val.)", lb_prev,   lb_best),
     stat_row("Shapiro (p val.)",   sh_prev,   sh_best),
     stat_row("Transform",          tf_prev,   tf_best),
     stat_row("AICc",               aicc_prev, aicc_best),
@@ -228,9 +228,9 @@ sa_engine_choice_card <- function(res) .build_engine_choice_card(res)
   eng <- if ("engine" %in% names(br)) as.character(br$engine) else .engine_used(res$best)
   
   # small local formatters (don't rely on globals)
-  fmtP <- function(p) ifelse(is.na(p), "—", ifelse(p < 0.001, "<0.001", sprintf("%.3f", p)))
+  fmtP <- function(p) ifelse(is.na(p), "\u2014", ifelse(p < 0.001, "<0.001", sprintf("%.3f", p)))
   
-  # Residual seasonality (QS on SA) — higher p is better
+  # Residual seasonality (QS on SA) \u2014 higher p is better
   p_x11_sa   <- br$QS_p_x11
   p_seats_sa <- br$QS_p_seats
   

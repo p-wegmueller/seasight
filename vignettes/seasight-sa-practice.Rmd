@@ -334,53 +334,97 @@ marginally improves diagnostics.
 > * `sa_top_candidates_table()` highlights the few models that are worth a human look.
 > * `sa_tests_model()` gives a standardised diagnostic vector for documentation and monitoring.
 
-### 3.3 Calendar effects: trading days and Easter
+### 3.3 Calendar effects: trading days, Easter, and user xregs
 
-In Part I, calendar adjustment was framed as a two-step decision:
-economic plausibility and statistical evidence. The same logic underpins
-the TD and Easter handling in **seasight**.
+In **seasight**, calendar adjustment is **not** a hidden default. Instead,
+`auto_seasonal_analysis()` compares
 
-When you call `auto_seasonal_analysis()`, you specify the *type* of
-trading-day adjustment you are willing to consider (if any):
+- a *no‑xreg* candidate (baseline), and
+- one candidate for **each** regressor in `td_candidates`.
+
+This makes the “do we need calendar regressors?” question explicit and reproducible.
+
+#### 3.3.1 Supplying calendar regressors via `td_candidates`
+
+`td_candidates` is a **named list** of `ts` (or ts-boxable) regressors aligned to `y`.
+You can build these regressors yourself, or use the helper `build_user_xreg()`
+for *Genhol-style* moving-holiday pulses.
 
 ```{r sa-auto-td, eval = FALSE}
+# Example 1: moving-holiday pulse (Diwali)
+diwali_dates <- as.Date(c(
+  "2018-11-07","2019-10-27","2020-11-14","2021-11-04",
+  "2022-10-24","2023-11-12","2024-11-01"
+))
+
+td <- build_user_xreg(
+  y = y,
+  holidays = list(list(name = "diwali", dates = diwali_dates, start = -1, end = 1)),
+  td_usertype = "holiday"
+)
+
 res_td <- auto_seasonal_analysis(
   y              = y,
   engine         = "auto",
-  td_usertype    = "td",     # or "working_days", "none", etc.
-  include_easter = "auto"    # let seasight test Easter where meaningful
+  td_candidates  = td,
+  include_easter = "auto"
 )
 ```
 
-Internally, seasight compares candidates **with** and **without**
-calendar regressors and records the impact on diagnostics and fit. In
-the candidate table you can inspect, for example, whether the preferred
-model uses TD and Easter:
+You can also pass precomputed regressors:
 
-```{r sa-td-inspect, eval = FALSE}
-res_td$table[
-  1,
-  c("model_label", "with_td", "QS_SA", "LB_p")
-]
+```{r sa-auto-td-precomputed, eval = FALSE}
+td2 <- build_user_xreg(
+  y = y,
+  td_candidates = list(
+    wd = wd_regressor,        # e.g. working-days regressor you computed externally
+    td = td_regressor         # e.g. trading-day contrast
+  ),
+  td_usertype = "td"
+)
+
+res_td2 <- auto_seasonal_analysis(
+  y              = y,
+  engine         = "auto",
+  td_candidates  = td2,
+  include_easter = "off"
+)
 ```
 
-The text calls in `res_td$seasonality` summarise the recommended
-treatment:
+#### 3.3.2 A practical note on SEATS and future xreg values
+
+When the decomposition engine is **SEATS**, X-13 typically generates an internal
+forecast horizon (often around ~3 years). For models with `xreg`, X-13 requires
+the regressor to exist over that horizon.
+
+`seasight` handles this automatically **for pulse-type holiday regressors**
+(e.g. `genhol()` output) by padding the regressor with zeros into the forecast horizon.
+For non-pulse calendar regressors (e.g. trading-day counts), you should ideally
+provide future values yourself (calendar information is known), or run with `engine = "x11"`
+to avoid SEATS’ reliance on that internal forecast horizon.
+
+#### 3.3.3 Inspecting what won (and why)
+
+The result table tells you whether the winning model used an xreg, and which one:
+
+```{r sa-td-inspect, eval = FALSE}
+res_td$table[1, c("model_label", "with_td", "td_name", "with_easter", "engine", "QS_p", "LB_p")]
+```
+
+And the text summary in `res$seasonality` makes the overall treatment explicit:
 
 ```{r sa-td-calls, eval = FALSE}
 res_td$seasonality$overall$call_td
 res_td$seasonality$overall$call_easter
 ```
 
-This allows you to line up the **economic expectation** (e.g. “TD should
-matter for production, but probably not for this ratio series”) with the
-statistical evidence, and to document the final choice.
-
-> **With seasight**
+> **K.I.S.S. punchlines**
 >
-> * TD / Easter are treated as **options**, not automatic defaults.
-> * The candidate table shows how diagnostics change with and without calendar effects.
-> * `res$seasonality$overall$call_td` and `call_easter` make the final choice explicit and reproducible.
+> * Calendar effects are treated as **explicit options** via `td_candidates`.
+> * The table records **whether** and **which** regressor won (`with_td`, `td_name`).
+> * For SEATS + `xreg`, pulses are padded automatically; other regressors should include future values.
+
+
 
 ### 3.4 Stability, revisions and model review
 

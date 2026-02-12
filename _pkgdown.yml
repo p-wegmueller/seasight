@@ -62,6 +62,7 @@ reference:
       - extract_outliers
       - sa_compare
       - sa_copyable_call
+      - build_user_xreg
 
 news:
   one_page: true

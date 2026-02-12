@@ -18,7 +18,7 @@ sa_should_switch(
 \item min_qs_p: minimum acceptable QS p-value on SA (overall) for the best model
 \item max_dist_sa_mult: allow SA L1 distance up to this multiple of the cross-candidate median
 \item min_corr_seas: minimum correlation of seasonal components (vs. incumbent)
-\item min_lb_p: minimum acceptable Ljung–Box p-value on residuals
+\item min_lb_p: minimum acceptable Ljung-Box p-value on residuals
 }}
 }
 \value{

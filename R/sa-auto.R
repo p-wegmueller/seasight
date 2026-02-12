@@ -279,7 +279,7 @@ auto_seasonal_analysis <- function(y,
     })
   }
   
-  # Collapse bundles to flat vectors
+  # Collapse bundles to flat vectors (keep only successfully estimated models)
   fits <- list(); labels <- character(0)
   with_td_flag <- logical(0); with_easter_flag <- logical(0)
   td_name_vec <- character(0)
@@ -287,11 +287,13 @@ auto_seasonal_analysis <- function(y,
   for (i in seq_along(fit_bundles)) {
     for (j in seq_along(fit_bundles[[i]])) {
       b <- fit_bundles[[i]][[j]]
+      if (!inherits(b$model, "seas")) next
+      
       fits             <- c(fits, list(b$model))
       labels           <- c(labels, paste0("Spec_", length(fits)))
       with_td_flag     <- c(with_td_flag,     isTRUE(b$with_td))
       with_easter_flag <- c(with_easter_flag, isTRUE(b$with_easter))
-      td_name_vec      <- c(td_name_vec,      b$td_name)
+      td_name_vec      <- c(td_name_vec,      b$td_name %||% NA_character_)
     }
   }
   if (!length(fits)) stop("All candidate specifications failed to estimate.")

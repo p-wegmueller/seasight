@@ -145,6 +145,35 @@ The most important components are:
   A nested list with an “existence-of-seasonality” decision for the original
   series, based on QS, IDS and M7 (see Eurostat guidelines).([European Commission][1])
 
+
+
+## Calendar regressors (trading days & moving holidays)
+
+`seasight` can compare models **without** regressors against models **with**
+user-supplied calendar regressors via `td_candidates`.
+
+A key design choice: the package does not ship country-specific calendars.
+Instead you can build generic regressors yourself and pass them in.
+
+```{r td-candidates, eval = FALSE}
+# Example: build a Diwali "pulse" regressor (quarterly here, for illustration)
+diwali_dates <- as.Date(c(
+  "2018-11-07","2019-10-27","2020-11-14","2021-11-04",
+  "2022-10-24","2023-11-12","2024-11-01"
+))
+
+td <- build_user_xreg(
+  y = x,
+  holidays = list(list(name = "diwali", dates = diwali_dates, start = -1, end = 1)),
+  td_usertype = "holiday"
+)
+
+res_td <- auto_seasonal_analysis(x, td_candidates = td, engine = "auto")
+```
+
+For more realistic workflows (multiple TD candidates, baselines, and decision rules),
+see the **SA practice** and **Advanced** vignettes.
+
 ### Inspecting the winning model
 
 The winning model is in `res$best`:

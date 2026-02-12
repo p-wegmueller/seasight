@@ -1,5 +1,5 @@
 # =============================================================================
-# sa-report.R — Build the Seasonal Adjustment HTML report
+# sa-report.R Build the Seasonal Adjustment HTML report
 # =============================================================================
 
 #' Build the Seasonal Adjustment HTML report (engine)
@@ -62,7 +62,7 @@ sa_issue_report_html <- function(
           has("ARIMA_disp") ~ .data$ARIMA_disp,
           has("arima")      ~ as.character(.data$arima),
           has("spec_id")    ~ as.character(.data$spec_id),
-          TRUE              ~ "—"
+          TRUE              ~ "\u2014"
         )
       ) %>%
       dplyr::transmute(
@@ -75,7 +75,7 @@ sa_issue_report_html <- function(
       )
     
     th <- htmltools::tags$tr(
-      lapply(c("Best","Incumbent","Model","TD","AICc","LB p","QS X-11","QS SEATS","QS overall","Vola ↓","Amp %","Dist L1"),
+      lapply(c("Best","Incumbent","Model","TD","AICc","LB p","QS X-11","QS SEATS","QS overall","Vola \u2193","Amp %","Dist L1"),
              function(x) htmltools::tags$th(x))
     )
     
@@ -103,8 +103,8 @@ sa_issue_report_html <- function(
     )
     
     legend <- htmltools::div(class = "legend",
-                             htmltools::span(class = "chip chip-best", "✅ best"),
-                             htmltools::span(class = "chip chip-prev", "⭐ current")
+                             htmltools::span(class = "chip chip-best", "\u2705 best"),
+                             htmltools::span(class = "chip chip-prev", "\u2B50 current")
     )
     
     htmltools::tagList(
@@ -159,7 +159,7 @@ sa_issue_report_html <- function(
   ol_rule_line <- glue::glue(
     "Outlier detection: method {outlier_method}; types = {paste(outlier_types, collapse = ', ')}; ",
     "critical z = {.num_safe(ol_crit, 2)}",
-    "{if (!is.null(outlier_alpha)) glue::glue(' (≈ α = {.num_safe(outlier_alpha, 3)})') else ''}."
+    "{if (!is.null(outlier_alpha)) glue::glue(' (\u2248 \u03B1 = {.num_safe(outlier_alpha, 3)})') else ''}."
   )
   
   # Seasonality call & DNA rule
@@ -219,7 +219,7 @@ sa_issue_report_html <- function(
     if (is.character(from_code) && nzchar(from_code)) {
       from_code
     } else {
-      # fallback to row → ARIMA_disp → arima
+      # fallback to row \u2192 ARIMA_disp \u2192 arima
       z <- NA_character_
       if ("ARIMA_disp" %in% names(best_r) && is.character(best_r$ARIMA_disp) && nzchar(best_r$ARIMA_disp)) {
         z <- best_r$ARIMA_disp
@@ -266,7 +266,7 @@ sa_issue_report_html <- function(
     prev_outliers  = if (!is.null(prev_outliers)) prev_outliers else NULL
   )
   
-  # 4) SA comparison/coefficients — only if incumbent differs from best
+  # 4) SA comparison/coefficients \u2014 only if incumbent differs from best
   render_alt <- .should_show_alternative(candidates, incumbent_spec_id)
   
   img_cmp_sa  <- img_cmp_pc <- stats_tbl_html <- NULL
@@ -277,7 +277,7 @@ sa_issue_report_html <- function(
       p_cmp_sa <- tempfile(fileext = ".png")
       grDevices::png(p_cmp_sa, width = png_width, height = png_height)
       stats::ts.plot(al_sa$prev, al_sa$new, col = c("black","firebrick"), lwd = 2,
-                     ylab = "", main = "Seasonally Adjusted Levels — current vs New")
+                     ylab = "", main = "Seasonally Adjusted Levels \u2014 current vs New")
       graphics::legend("topleft", legend = c("current","New"),
                        col = c("black","firebrick"), lty = 1, lwd = 2, bty = "n")
       grDevices::dev.off()
@@ -296,7 +296,7 @@ sa_issue_report_html <- function(
       p_cmp_pc <- tempfile(fileext = ".png")
       grDevices::png(p_cmp_pc, width = png_width, height = png_height)
       stats::ts.plot(al_pc$prev, al_pc$new, col = c("gray25","royalblue"), lwd = 2,
-                     ylab = "", main = "SA Growth (percent change) — current vs New")
+                     ylab = "", main = "SA Growth (percent change) \u2014 current vs New")
       graphics::abline(h = 0, col = "gray80", lwd = 1)
       graphics::legend("topleft", legend = c("current","New"),
                        col = c("gray25","royalblue"), lty = 1, lwd = 2, bty = "n")
@@ -310,7 +310,7 @@ sa_issue_report_html <- function(
     }
   }
   
-  # 5) Plots — respect DNA (show raw series panels if DNA)
+  # 5) Plots \u2014 respect DNA (show raw series panels if DNA)
   dir.create(dirname(outfile), showWarnings = FALSE, recursive = TRUE)
   p_best_main <- tempfile(fileext = ".png")
   p_best_mon  <- tempfile(fileext = ".png")
@@ -339,26 +339,26 @@ sa_issue_report_html <- function(
     qs_line  <- glue::glue(
       "Existence of seasonality (QS on original): ",
       "X-11 = {.flagP(best_r$QSori_p_x11, 0.10)}, ",
-      "SEATS = {.flagP(best_r$QSori_p_seats, 0.10)} → overall = {.flagP(best_r$QSori_p, 0.10)}."
+      "SEATS = {.flagP(best_r$QSori_p_seats, 0.10)} \u2192 overall = {.flagP(best_r$QSori_p, 0.10)}."
     )
     ids_line <- glue::glue("Identifiable seasonality (IDS): {best_r$IDS}.")
     m7_line  <- glue::glue(
-      "M7 (X-11): { .num(best_r$M7,2) } → ",
+      "M7 (X-11): { .num(best_r$M7,2) } \u2192 ",
       "{ ifelse(best_r$M7 < 0.9,'clear seasonality', ifelse(best_r$M7 < 1.05,'weak seasonality','no seasonality')) }."
     )
-    lb_line  <- "Residual autocorrelation (Ljung–Box): n/a (no seasonal adjustment)."
+    lb_line  <- "Residual autocorrelation (Ljung-Box): n/a (no seasonal adjustment)."
   } else {
     qs_line  <- glue::glue(
       "Residual seasonality (QS on SA): ",
       "X-11 = {.flagP(best_r$QS_p_x11, 0.10)}, ",
-      "SEATS = {.flagP(best_r$QS_p_seats, 0.10)} → overall = {.flagP(best_r$QS_p, 0.10)}."
+      "SEATS = {.flagP(best_r$QS_p_seats, 0.10)} \u2192 overall = {.flagP(best_r$QS_p, 0.10)}."
     )
     ids_line <- glue::glue("Identifiable seasonality (IDS): {best_r$IDS}.")
     m7_line  <- glue::glue(
-      "M7 (X-11): { .num(best_r$M7,2) } → ",
+      "M7 (X-11): { .num(best_r$M7,2) } \u2192 ",
       "{ ifelse(best_r$M7 < 0.9,'clear seasonality', ifelse(best_r$M7 < 1.05,'weak seasonality','no seasonality')) }."
     )
-    lb_line  <- glue::glue("Residual autocorrelation (Ljung–Box): {.flagP(best_r$LB_p, 0.05)}")
+    lb_line  <- glue::glue("Residual autocorrelation (Ljung-Box): {.flagP(best_r$LB_p, 0.05)}")
   }
   
   if (dna) {
@@ -396,7 +396,7 @@ sa_issue_report_html <- function(
     paste(glue::glue("{prev_outliers$type}{prev_outliers$period} ({.num(prev_outliers$coef,3)})"), collapse = ", ")
   } else if (!is.null(current_model)) "none detected." else NULL
   
-  # --- Top candidates: best first, include incumbent (⭐) -------------------
+  # --- Top candidates: best first, include incumbent (\u2B50) -------------------
   top_tbl_node <- .build_top_candidates_table(res, current_model = current_model, y = y, n = 10L)
   
   # ---- IDs for copy buttons --------------------------------------------------
@@ -489,7 +489,7 @@ document.addEventListener('click', function(e){
                                           htmltools::div(class="card",
                                                          htmltools::tags$h1(title),
                                                          htmltools::div(class="sub",
-                                                                        paste0("Frequency: ", res$frequency, " • Transform: ", best_tf))
+                                                                        paste0("Frequency: ", res$frequency, " \u2022 Transform: ", best_tf))
                                           ),
                                           
                                           .build_existence_card(res),
@@ -501,7 +501,7 @@ document.addEventListener('click', function(e){
                                                                         htmltools::HTML(paste0("<b>Best candidate (by score)</b>: ", if (no_sa) "n/a" else sprintf("<span class='mono nowrap'>%s</span>", htmltools::htmlEscape(best_arima_disp)))),
                                                                         htmltools::div(htmltools::HTML(paste0("<b>TD</b>: ",         if (no_sa) "n/a" else ifelse(best_r$with_td,"yes","no")))),
                                                                         htmltools::div(htmltools::HTML(paste0("<b>AICc</b>: ",       if (no_sa) "n/a" else .num(best_r$AICc,2)))),
-                                                                        htmltools::div(htmltools::HTML(paste0("<b>Ljung–Box p</b>: ", if (no_sa) "n/a" else .flagP(best_r$LB_p, 0.05)))),
+                                                                        htmltools::div(htmltools::HTML(paste0("<b>Ljung-Box p</b>: ", if (no_sa) "n/a" else .flagP(best_r$LB_p, 0.05)))),
                                                                         htmltools::div(htmltools::HTML(paste0("<b>Engine</b>: ",     if (no_sa) "n/a" else best_engine))),
                                                                         htmltools::div(htmltools::HTML(paste0("<b>Decision</b>: <span class='pill'>", decision_txt, "</span>")))
                                                                         
@@ -517,7 +517,7 @@ document.addEventListener('click', function(e){
                                           .build_engine_choice_card(res),
                                           
                                           if (isTRUE(render_alt) && !is.null(current_model)) htmltools::div(class="card",
-                                                                                                            htmltools::tags$h2("Comparison — New vs current"),
+                                                                                                            htmltools::tags$h2("Comparison \u2014 New vs current"),
                                                                                                             htmltools::tags$h3("Seasonally Adjusted Levels"),
                                                                                                             img_cmp_sa,
                                                                                                             htmltools::tags$h3("SA Growth (percent change)"),
@@ -526,7 +526,7 @@ document.addEventListener('click', function(e){
                                                                                                             stats_tbl_html
                                           ),
                                           
-                                          # Copy-paste blocks (NEW) — with Copy buttons
+                                          # Copy-paste blocks (NEW) \u2014 with Copy buttons
                                           if (!dna) htmltools::div(
                                             class="card",
                                             htmltools::tags$h2("Copy-paste model (New)"),
@@ -594,12 +594,12 @@ document.addEventListener('click', function(e){
                                           ),
                                           
                                           htmltools::div(class="card",
-                                                         htmltools::tags$h2("Plots — Best model"),
+                                                         htmltools::tags$h2("Plots \u2014 Best model"),
                                                          htmltools::div(class="grid", img_best_main, img_best_mon)
                                           ),
                                           
                                           if (!is.null(current_model)) htmltools::div(class="card",
-                                                                                      htmltools::tags$h2("Plots — current model"),
+                                                                                      htmltools::tags$h2("Plots \u2014 current model"),
                                                                                       htmltools::div(class="grid", img_prev_main, img_prev_mon)
                                           ),
                                           
@@ -622,7 +622,7 @@ document.addEventListener('click', function(e){
                                                          top_tbl_node,
                                                          htmltools::tags$p(class="sub",
                                                                            "This table lists the highest-ranked specifications by the composite score used in the analysis. ",
-                                                                           "Columns include: AICc; Ljung–Box p (residual autocorrelation); QS p-values from X-11 and SEATS; ",
+                                                                           "Columns include: AICc; Ljung-Box p (residual autocorrelation); QS p-values from X-11 and SEATS; ",
                                                                            "overall QS (the minimum of those two); trading-day p (if a TD regressor is present); ",
                                                                            "volatility reduction of SA vs. original (based on percent-change standard deviations); ",
                                                                            "seasonal amplitude as % of the original level; L1 distance of the new SA vs. the current SA (if available); ",
@@ -648,9 +648,9 @@ document.addEventListener('click', function(e){
 #'
 #' Notes:
 #' - If the provided *current* specification equals the selected *best* model,
-#'   the report omits the “Alternative model” comparison section.
-#' - The “Top candidates” table starts with the best model and always includes
-#'   the current model (flagged with ⭐) when one is supplied.
+#'   the report omits the "Alternative model" comparison section.
+#' - The "Top candidates" table starts with the best model and always includes
+#'   the current model (flagged with a star ★) when one is supplied.
 #'
 #' @param y Time series to be analysed. Can be a `ts` object or anything that
 #'   `tsbox::ts_ts()` can convert to `ts`.
@@ -660,7 +660,7 @@ document.addEventListener('click', function(e){
 #'   trading-day regressors are used (default `"td"`).
 #' @param td_candidates Optional named list of trading-day candidate regressors
 #'   (e.g. `list(wd = wd.m, wd1 = wd1.m)`), each aligned with `y`.
-#' @param use_fivebest Logical. If `TRUE`, include the “five best” automatic
+#' @param use_fivebest Logical. If `TRUE`, include the "five best" automatic
 #'   specs in the candidate grid.
 #' @param title Title of the report shown in the HTML page.
 #' @param outfile Path to the HTML file to be written.
@@ -746,7 +746,7 @@ sa_report_html <- function(
 #' model** (if supplied) even if it is not in the top `n`. The airline
 #' reference model ARIMA (0 1 1)(0 1 1) is also appended if absent.
 #'
-#' Rows are lightly shaded: ✅ best (green), ⭐ current (blue), airline (red).
+#' Rows are lightly shaded: ✓ best (green), ★ current (blue), airline (red).
 #'
 #' @param res Result of [auto_seasonal_analysis()].
 #' @param current_model Optional fitted [seasonal::seas] model to mark as "current".
@@ -763,8 +763,8 @@ sa_top_candidates_table <- function(res, current_model = NULL, y = NULL, n = 5) 
 #' @keywords internal
 #' @noRd
 .build_top_candidates_table <- function(res, current_model = NULL, y = NULL, n = 5) {
-  .num   <- function(x, d = 3) ifelse(is.na(x), "—", sprintf(paste0("%.", d, "f"), x))
-  .fmtP  <- function(p) ifelse(is.na(p), "—", ifelse(p < 0.001, "<0.001", sprintf("%.3f", p)))
+  .num   <- function(x, d = 3) ifelse(is.na(x), "\u2014", sprintf(paste0("%.", d, "f"), x))
+  .fmtP  <- function(p) ifelse(is.na(p), "\u2014", ifelse(p < 0.001, "<0.001", sprintf("%.3f", p)))
   html_escape <- function(x) htmltools::htmlEscape(x)
   normalize <- function(s) gsub("\\s+", " ", trimws(ifelse(is.na(s), "", as.character(s))))
   
@@ -870,7 +870,7 @@ sa_top_candidates_table <- function(res, current_model = NULL, y = NULL, n = 5) 
     }
   }
   
-  # Row flags/classes — ALWAYS length nrow(top)
+  # Row flags/classes \u2014 ALWAYS length nrow(top)
   n_top <- nrow(top)
   best_label <- if ("model_label" %in% names(tbl)) tbl$model_label[1] else NA_character_
   
@@ -887,7 +887,7 @@ sa_top_candidates_table <- function(res, current_model = NULL, y = NULL, n = 5) 
   # ---- Render table ----
   th <- c("Label","ARIMA","TD","AICc","LB p",
           "QSori p","QS X-11 p","QS SEATS p","QS (min)","TD p",
-          "Volatility ↓ %","Seasonal amp %","L1 vs prev SA","Rev MAE")
+          "Volatility \u2193 %","Seasonal amp %","L1 vs prev SA","Rev MAE")
   header <- htmltools::tags$tr(lapply(th, htmltools::tags$th))
   
   body_rows <- lapply(seq_len(n_top), function(i) {
@@ -924,8 +924,8 @@ sa_top_candidates_table <- function(res, current_model = NULL, y = NULL, n = 5) 
   
   legend <- htmltools::div(
     class = "legend",
-    htmltools::span(class="chip chip-best",    "✅ best"),
-    htmltools::span(class="chip chip-prev",    "⭐ current"),
+    htmltools::span(class="chip chip-best",    "\u2705 best"),
+    htmltools::span(class="chip chip-prev",    "\u2B50 current"),
     htmltools::span(class="chip chip-airline", "Airline model")
   )
   
@@ -989,7 +989,7 @@ sa_top_candidates_table <- function(res, current_model = NULL, y = NULL, n = 5) 
   vola_red <- get1(br, "vola_reduction_pct")
   seas_amp <- get1(br, "seasonal_amp_pct")
   
-  # >>> The runner-up ARIMA — robust row-wise pick <<<
+  # >>> The runner-up ARIMA \u2014 robust row-wise pick <<<
   ru_arima   <- if (!is.null(sr)) .sanitize_arima(.coalesce_arima_str(sr)) else NULL
   ru_with_td <- if (!is.null(sr)) isTRUE(get1(sr, "with_td", default = FALSE)) else NULL
   
@@ -1002,7 +1002,7 @@ sa_top_candidates_table <- function(res, current_model = NULL, y = NULL, n = 5) 
           if (with_td) "with trading-day (TD) regressor" else "without TD",
           ", selected because it achieved the <b>lowest composite score</b> among candidates",
           if (!is.na(gap_score)) paste0(" (margin vs. next best: ", sprintf("%.3f", gap_score), ", lower is better)") else "",
-          ". The composite score prioritises residual seasonality (QS), residual autocorrelation (Ljung–Box), model parsimony (AICc), ",
+          ". The composite score prioritises residual seasonality (QS), residual autocorrelation (Ljung-Box), model parsimony (AICc), ",
           "stability under history extension (revision MAE), and proximity to the incumbent seasonal adjustment (L1 distance)."
         )
       )
@@ -1012,7 +1012,7 @@ sa_top_candidates_table <- function(res, current_model = NULL, y = NULL, n = 5) 
         paste0(
           "Diagnostics for the winner: QS(X-11) p = ", P(qs_x11),
           ", QS(SEATS) p = ", P(qs_seats),
-          " → overall QS = ", P(qs_min), "; Ljung–Box p = ", P(lb_p),
+          " \u2192 overall QS = ", P(qs_min), "; Ljung-Box p = ", P(lb_p),
           "; volatility reduction (SA vs. original) = ", N(vola_red, 1), "%; seasonal amplitude = ",
           N(seas_amp, 2), "%."
         )
@@ -1023,7 +1023,7 @@ sa_top_candidates_table <- function(res, current_model = NULL, y = NULL, n = 5) 
         paste0(
           "Against the runner-up (<code>ARIMA ", htmltools::htmlEscape(ru_arima), "</code> ",
           if (isTRUE(ru_with_td)) "with TD" else "without TD", "), the winning model ",
-          if (!is.na(gap_aicc)) paste0("also improves AICc (ΔAICc = ", sprintf("%.2f", gap_aicc), "); ") else "",
+          if (!is.na(gap_aicc)) paste0("also improves AICc (\u0394AICc = ", sprintf("%.2f", gap_aicc), "); ") else "",
           "and achieves a lower revision MAE (where available)."
         )
       )
@@ -1035,8 +1035,8 @@ sa_top_candidates_table <- function(res, current_model = NULL, y = NULL, n = 5) 
           if (!is.null(prev_arima)) paste0(" (<code>ARIMA ", htmltools::htmlEscape(prev_arima), "</code>)") else "",
           ", the L1 distance of SA levels for the new candidate is ",
           N(get1(br, "dist_sa_L1"), 2),
-          if (is.finite(get1(br, "corr_seas"))) paste0("; correlation of seasonal factors ≈ ", N(get1(br, "corr_seas"), 3)) else "",
-          if (isTRUE(prev_is_best)) " — the current specification already matches the selected best, so the alternative comparison section is omitted." else "."
+          if (is.finite(get1(br, "corr_seas"))) paste0("; correlation of seasonal factors \u2248 ", N(get1(br, "corr_seas"), 3)) else "",
+          if (isTRUE(prev_is_best)) " \u2014 the current specification already matches the selected best, so the alternative comparison section is omitted." else "."
         )
       )
     ) else NULL
