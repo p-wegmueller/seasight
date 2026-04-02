@@ -1,7 +1,7 @@
 Package: seasight
 Type: Package
 Title: Tools for Seasonal Adjustment Diagnostics and Reporting
-Version: 0.0.0.9000
+Version: 0.0.1
 Authors@R: 
     person("Philipp", "Wegmüller", 
            email = "philipp.wegmueller@seco.admin.ch", 
