@@ -27,7 +27,8 @@ Imports:
 Suggests:
     testthat (>= 3.0.0),
     knitr,
-    rmarkdown
+    rmarkdown,
+    callr
 VignetteBuilder: knitr
 Config/testthat/edition: 3
 URL: https://p-wegmueller.github.io/seasight/
