@@ -1042,7 +1042,7 @@ sa_top_candidates_table <- function(res, current_model = NULL, y = NULL, n = 5) 
           "<b>Selection rationale.</b> The chosen specification is <code>ARIMA ",
           htmltools::htmlEscape(arima_best), "</code> ",
           if (with_td) "with trading-day (TD) regressor" else "without TD",
-          ", selected because it achieved the <b>highest overall score (0–100; higher is better)</b> among candidates",
+          ", selected because it achieved the <b>highest overall score (0-100; higher is better)</b>",
           if (!is.na(gap_score)) paste0(" (margin vs. next best: ", sprintf("%.1f", gap_score), " points)") else "",
           ". The composite score prioritises residual seasonality (QS), residual autocorrelation (Ljung-Box), model parsimony (AICc), ",
           "stability under history extension (revision MAE), and proximity to the incumbent seasonal adjustment (L1 distance)."

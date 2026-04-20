@@ -37,7 +37,7 @@ test_that("selection rationale uses higher-is-better score wording", {
   )
   node <- seasight:::.build_selection_rationale(res, current_model = NULL)
   txt <- paste(as.character(node), collapse = " ")
-  expect_match(txt, "highest overall score \\(0–100; higher is better\\)")
+  expect_match(txt, "highest overall score \\(0-100; higher is better\\)")
 })
 
 test_that("top-candidates table exposes score_100 and orders by it descending", {

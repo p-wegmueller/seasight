@@ -54,11 +54,14 @@ t_safe <- function(x) {
 }
 
 .build_top_candidates_table <- function(res, current_model = NULL, y = NULL, n = 5) {
-  stopifnot(inherits(res, "auto_seasonal_analysis"), is.data.frame(res$table), nrow(res$table) >= 1)
+  stopifnot(is.list(res), is.data.frame(res$table), nrow(res$table) >= 1)
 
   tbl <- tryCatch(.coalesce_arima_cols(res$table), error = function(e) tibble::as_tibble(res$table))
   tbl$score_100 <- .report_score_100(tbl)
   tbl$arima <- vapply(seq_len(nrow(tbl)), function(i) .report_arima(tbl[i, , drop = FALSE]), character(1))
+  tbl <- dplyr::arrange(tbl, dplyr::desc(.data$score_100))
+  n_total <- nrow(tbl)
+  n_ranked <- min(as.integer(n), n_total)
 
   disp_cols <- c(
     "model_label", "arima", "with_td", "td_name", "td_label", "score_100",
@@ -68,7 +71,7 @@ t_safe <- function(x) {
 
   top <- tbl |>
     dplyr::select(dplyr::any_of(disp_cols)) |>
-    dplyr::slice(seq_len(min(as.integer(n), nrow(tbl))))
+    dplyr::slice(seq_len(n_ranked))
 
   airline_arima <- "(0 1 1)(0 1 1)"
   if (!any(.report_norm(top$arima) == .report_norm(airline_arima), na.rm = TRUE)) {
@@ -111,7 +114,7 @@ t_safe <- function(x) {
   top$is_airline <- .report_norm(top$arima) == .report_norm(airline_arima)
 
   header <- htmltools::tags$tr(lapply(
-    c("Label", "ARIMA", "Overall score", "TD regressor", "AICc", "LB p", "QSori p",
+    c("Label", "ARIMA", "Score (0-100)", "TD regressor", "AICc", "LB p", "QSori p",
       "QS X-11 p", "QS SEATS p", "QS min", "TD p", "Volatility red. %",
       "Seasonal amp %", "L1 vs prev SA", "Rev. MAE"),
     htmltools::tags$th
@@ -140,13 +143,15 @@ t_safe <- function(x) {
     )
   })
 
-  styles <- htmltools::tags$style(htmltools::HTML(
-    ".tbl-colored .row-airline td { background:#fff1f2; }
+  styles <- htmltools::tags$style(htmltools::HTML(paste0(
+    .report_shared_css(),
+    "
+.tbl-colored .row-airline td { background:#fff1f2; }
      .chip-airline{ background:#fee2e2 !important; color:#991b1b !important; border:1px solid #fecaca !important; }
      .tbl-colored th, .tbl-colored td { vertical-align: middle; }
      .tbl-colored th:nth-child(2), .tbl-colored td:nth-child(2){ min-width:180px; max-width:320px; }
      .tbl-colored .model-spec { white-space:normal; overflow-wrap:anywhere; }"
-  ))
+  )))
 
   legend <- htmltools::div(
     class = "legend",
@@ -158,13 +163,20 @@ t_safe <- function(x) {
   foot <- htmltools::tags$p(
     class = "tbl-note",
     htmltools::HTML(paste0(
-      "Overall score is normalized to 0-100; higher is better. Showing ",
-      min(as.integer(n), nrow(tbl)), " of ", nrow(tbl),
+      "Overall score is normalized to 0-100; higher is better. Showing top <b>",
+      n_ranked, "</b> of <b>", n_total, "</b>",
       " ranked candidates; current and airline reference rows may be added when relevant."
     ))
   )
+  filtered_foot <- if (n_total > n_ranked) htmltools::tags$p(
+    class = "tbl-note",
+    htmltools::HTML(paste0(
+      "Showing top <b>", n_ranked, "</b> of <b>", n_total,
+      "</b> candidates; lower-ranked candidates are hidden for readability."
+    ))
+  )
 
-  htmltools::tagList(styles, htmltools::tags$table(class = "tbl tbl-colored", htmltools::tags$thead(header), htmltools::tags$tbody(body_rows)), legend, foot)
+  htmltools::tagList(styles, htmltools::tags$table(class = "tbl tbl-colored", htmltools::tags$thead(header), htmltools::tags$tbody(body_rows)), legend, foot, filtered_foot)
 }
 
 .build_selection_rationale <- function(res, current_model = NULL, override_best_arima = NULL) {
@@ -211,8 +223,7 @@ t_safe <- function(x) {
       htmltools::HTML(paste0(
         "<b>Selection rationale.</b> The chosen specification is <code>ARIMA ",
         esc(arima_best), "</code> ", td_txt,
-        ", selected because it achieved the <b>highest overall score</b> among candidates ",
-        "(0-100; higher is better)",
+        ", selected because it achieved the <b>highest overall score (0-100; higher is better)</b>",
         if (is.finite(score)) paste0("; score = ", N(score, 1)) else "",
         if (is.finite(score_gap)) paste0("; margin vs. next best = ", N(score_gap, 1)) else "",
         ". The score combines residual seasonality, residual autocorrelation, AICc, revision behavior, engine preference and distance to the incumbent where available."

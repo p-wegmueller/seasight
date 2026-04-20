@@ -28,7 +28,7 @@ test_that("top candidates table displays score_100 and TD labels", {
   res <- structure(list(table = tbl), class = "auto_seasonal_analysis")
 
   html <- paste(as.character(htmltools::renderTags(seasight:::.build_top_candidates_table(res, n = 2))$html), collapse = "\n")
-  expect_match(html, "Overall score", fixed = TRUE)
+  expect_match(html, "Score (0-100)", fixed = TRUE)
   expect_match(html, "96.5", fixed = TRUE)
   expect_match(html, "wd", fixed = TRUE)
   expect_match(html, "0-100; higher is better", fixed = TRUE)

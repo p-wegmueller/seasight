@@ -55,14 +55,13 @@
 # "ADJUST" without explanation is contradictory. We downgrade the
 # *display* call to BORDERLINE and surface a short note.
 .existence_call_ui <- function(res) {
-  stopifnot(inherits(res, "auto_seasonal_analysis"))
   call_raw <- tryCatch(as.character(res$seasonality$overall$call_overall[1]),
                        error = function(e) "\u2014")
   br <- tryCatch(dplyr::slice(res$table, 1), error = function(e) NULL)
   if (is.null(br) || !nrow(br)) {
     return(list(call = call_raw, note = NULL))
   }
-  eng <- as.character(br$engine %||% NA_character_)
+  eng <- if ("engine" %in% names(br)) as.character(br$engine[1]) else NA_character_
   seats_has <- if ("SEATS_has_seasonal" %in% names(br)) br$SEATS_has_seasonal else NA
   
   if (identical(eng, "seats") && identical(seats_has, FALSE) && identical(call_raw, "ADJUST")) {
