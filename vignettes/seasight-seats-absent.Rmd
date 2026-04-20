@@ -1,0 +1,54 @@
+---
+title: "Interpreting an absent SEATS seasonal component"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Interpreting an absent SEATS seasonal component}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  echo = TRUE,
+  eval = FALSE
+)
+```
+
+## What "absent" means
+
+In a SEATS decomposition, the seasonal component may be unavailable or effectively absent for a fitted model. This can happen when the fitted ARIMA structure does not imply a stable seasonal signal, when SEATS rejects the decomposition, or when the selected engine is not SEATS.
+
+In `seasight`, absence of a SEATS seasonal component is treated as diagnostic information rather than as a rendering error. The report should distinguish three cases:
+
+- `present`: a SEATS seasonal component is available.
+- `absent`: SEATS was used but no seasonal component is available.
+- `n/a`: the selected engine is not SEATS, so a SEATS seasonal component is not defined.
+
+This distinction matters because an absent seasonal component should not be interpreted as successful seasonal adjustment. It is evidence that the series may not have material seasonality under the selected model, or that the model should be reviewed.
+
+## How seasight uses the signal
+
+The automatic workflow combines the SEATS component check with QS, M7, IDS, residual diagnostics and seasonal-amplitude measures. In practical terms:
+
+- If existence-of-seasonality evidence is weak, the report should make `DO_NOT_ADJUST` explicit.
+- If SEATS is selected but the SEATS seasonal component is absent, the UI should downgrade the interpretation to borderline and suggest reviewing the specification or considering X-11.
+- If no seasonal candidate remains after seasonal-only screening, the production recommendation should be `DO_NOT_ADJUST` rather than a non-seasonal model.
+
+## Minimal inspection pattern
+
+```{r inspect-seats-component}
+library(seasight)
+library(seasonal)
+
+y <- AirPassengers
+res <- auto_seasonal_analysis(y, engine = "auto")
+
+best_row <- res$table[1, ]
+best_row[, c("engine", "SEATS_has_seasonal", "QSori_p", "QS_p", "M7", "IDS")]
+
+sa_is_do_not_adjust(best_row)
+```
+
+When reviewing an HTML report, check the existence-of-seasonality card before interpreting model ranking. A high-ranked model is only useful for adjustment if the underlying evidence supports material and stable seasonality.
