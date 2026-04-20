@@ -8,6 +8,8 @@ auto_seasonal_analysis(
   y,
   specs = NULL,
   use_fivebest = TRUE,
+  max_specs = NULL,
+  seasonal_only = TRUE,
   auto_outliers = TRUE,
   transform_fun = c("auto", "log", "none"),
   td_candidates = NULL,
@@ -42,8 +44,14 @@ form \code{"(p d q)(P D Q)"}. If \code{NULL}, default specs are chosen based
 on the series frequency.}
 
 \item{use_fivebest}{Logical. If \code{TRUE}, a small set of data-driven
-"five best" specs (à la \code{seasonal::seas(x, x11 = "")}) is added to
+"five best" specs (as in \code{seasonal::seas(x, x11 = "")}) is added to
 the candidate grid.}
+
+\item{max_specs}{Optional positive integer limiting the number of candidate
+ARIMA specifications fitted after de-duplication and seasonal filtering.}
+
+\item{seasonal_only}{Logical. If \code{TRUE} (default), candidate ARIMA
+specifications must have a non-zero seasonal order (\code{P + D + Q > 0}).}
 
 \item{auto_outliers}{Logical. If \code{TRUE}, enables automatic outlier
 detection in the candidate models.}

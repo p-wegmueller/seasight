@@ -40,3 +40,17 @@ test_that(".normalize_td_candidates fills only missing names and preserves td_us
   expect_identical(attr(out, "td_usertype"), "holiday")
   expect_true(all(vapply(out, inherits, logical(1), what = "ts")))
 })
+
+test_that("sa_align_regressor aligns compatible regressors and rejects mismatches", {
+  y <- ts(1:24, start = c(2020, 1), frequency = 12)
+  x <- ts(101:148, start = c(2019, 1), frequency = 12)
+  q <- ts(1:8, start = c(2020, 1), frequency = 4)
+
+  out <- sa_align_regressor(y, x)
+
+  expect_s3_class(out, "ts")
+  expect_equal(NROW(out), length(y))
+  expect_equal(stats::start(out), stats::start(y))
+  expect_equal(stats::end(out), stats::end(y))
+  expect_null(sa_align_regressor(y, q))
+})

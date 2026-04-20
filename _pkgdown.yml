@@ -47,6 +47,11 @@ reference:
       - auto_seasonal_analysis
       - sa_report_html
 
+  - title: Batch and debugging
+    contents:
+      - sa_batch_run
+      - probe_case
+
   - title: Diagnostics & decisions
     contents:
       - sa_tests_model
@@ -62,6 +67,7 @@ reference:
       - extract_outliers
       - sa_compare
       - sa_copyable_call
+      - sa_align_regressor
       - build_user_xreg
 
 news:

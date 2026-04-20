@@ -6,6 +6,20 @@ test_that("small report UI helpers are fail-soft", {
   expect_equal(as.character(seasight:::esc("<x>")), "&lt;x&gt;")
 })
 
+test_that("temporary plot image helper embeds and removes files", {
+  p <- tempfile(fileext = ".png")
+  grDevices::png(p, width = 100, height = 100)
+  old_par <- graphics::par(mar = c(0, 0, 0, 0))
+  on.exit(graphics::par(old_par), add = TRUE)
+  graphics::plot.new()
+  grDevices::dev.off()
+
+  uri <- seasight:::.image_uri_and_unlink(p)
+
+  expect_match(uri, "^data:image/png;base64,")
+  expect_false(file.exists(p))
+})
+
 test_that("top candidates table displays score_100 and TD labels", {
   tbl <- tibble::tibble(
     model_label = c("best", "runner"),

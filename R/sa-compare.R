@@ -221,7 +221,7 @@ sa_existence_card <- function(res) .build_existence_card(res)
 
 #' Engine choice rationale card (SEATS vs X-11)
 #'
-#' Explains—in plain language—why the selected engine was chosen for the best model.
+#' Explains, in plain language, why the selected engine was chosen for the best model.
 #' @param res Object from [auto_seasonal_analysis()].
 #' @return An htmltools tag (card).
 #' @export

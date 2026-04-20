@@ -8,20 +8,42 @@
   x <- trimws(x)
   if (!nzchar(x)) x <- "series"
   x <- gsub('[<>:"/\\\\|?*]', "_", x)
+  x <- gsub("[[:cntrl:]]+", "_", x)
   x <- gsub("\\s+", "_", x)
   x <- gsub("_+", "_", x)
   x <- sub("^_+", "", x)
   x <- sub("_+$", "", x)
+  if (tolower(x) %in% c("con", "prn", "aux", "nul", paste0("com", 1:9), paste0("lpt", 1:9))) {
+    x <- paste0(x, "_")
+  }
   if (!nzchar(x)) "series" else x
 }
 
-.batch_one_report <- function(y, outfile, report_fun, dots) {
+.batch_one_report <- function(y, outfile, report_fun, dots, timeout = Inf) {
   started <- Sys.time()
 
   out <- tryCatch(
     {
-      do.call(report_fun, c(list(y = y, outfile = outfile), dots))
+      if (is.finite(timeout)) {
+        if (!requireNamespace("callr", quietly = TRUE)) {
+          stop("Package `callr` is required when `timeout` is finite.", call. = FALSE)
+        }
+        callr::r(
+          func = function(y, outfile, report_fun, dots) {
+            do.call(report_fun, c(list(y = y, outfile = outfile), dots))
+          },
+          args = list(y = y, outfile = outfile, report_fun = report_fun, dots = dots),
+          timeout = timeout,
+          stdout = "|",
+          stderr = "|"
+        )
+      } else {
+        do.call(report_fun, c(list(y = y, outfile = outfile), dots))
+      }
       list(ok = TRUE, status = "ok", reason = NA_character_, message = "completed")
+    },
+    callr_timeout_error = function(e) {
+      list(ok = FALSE, status = "timeout", reason = "timeout", message = conditionMessage(e))
     },
     error = function(e) {
       list(ok = FALSE, status = "error", reason = "error", message = conditionMessage(e))
@@ -41,6 +63,9 @@
 #' @param out_dir Directory where HTML reports and `_sa_run_log.csv` are written.
 #' @param ids Optional character vector of IDs, same length as `series`.
 #' @param resume If `TRUE`, existing output files are skipped and logged as `skipped`.
+#' @param timeout Per-series timeout in seconds. Use `Inf` to run in the current
+#'   R process without a timeout. Finite values require the suggested `callr`
+#'   package and run each case in a clean subprocess.
 #' @param report_fun Report function to call per item. Defaults to [sa_report_html()].
 #' @param log_file Optional CSV log path. Defaults to `_sa_run_log.csv` in `out_dir`.
 #' @param ... Additional arguments passed to `report_fun`.
@@ -52,6 +77,7 @@ sa_batch_run <- function(series,
                          out_dir = "sa_reports",
                          ids = NULL,
                          resume = TRUE,
+                         timeout = Inf,
                          report_fun = sa_report_html,
                          log_file = NULL,
                          ...) {
@@ -80,7 +106,7 @@ sa_batch_run <- function(series,
     if (isTRUE(resume) && file.exists(outfile)) {
       row <- list(ok = TRUE, status = "skipped", reason = "exists", message = "output exists", elapsed_seconds = 0)
     } else {
-      row <- .batch_one_report(series[[i]], outfile, report_fun, dots)
+      row <- .batch_one_report(series[[i]], outfile, report_fun, dots, timeout = timeout)
     }
 
     rows[[i]] <- tibble::tibble(

@@ -35,13 +35,13 @@
     pmax(pen, 0)
   }
   
-  # Information criterion (lower is better) — scale 0..1, NA -> worst
+  # Information criterion (lower is better) - scale 0..1, NA -> worst
   s_aicc <- scale01_worstNA(tbl$AICc)
   
-  # Revision size (lower is better) — NA -> worst
+  # Revision size (lower is better) - NA -> worst
   s_rev <- scale01_worstNA(tbl$rev_mae)
   
-  # Distance to incumbent SA / seasonal (lower is better) — NA -> worst
+  # Distance to incumbent SA / seasonal (lower is better) - NA -> worst
   s_dist_sa   <- scale01_worstNA(tbl$dist_sa_L1)
   s_dist_seas <- scale01_worstNA(tbl$dist_seas_RMS)
   
@@ -78,7 +78,17 @@
     w_engine    * e_pen
   
   tbl$score <- as.numeric(score)
-  tbl <- dplyr::arrange(tbl, .data$score)
+  eng <- tolower(as.character(tbl$engine))
+  tbl$.engine_tiebreak <- if (engine_pref == "x11") {
+    ifelse(eng == "x11", 0L, ifelse(eng == "seats", 1L, 2L))
+  } else {
+    ifelse(eng == "seats", 0L, ifelse(eng == "x11", 1L, 2L))
+  }
+  tbl$.aicc_tiebreak <- suppressWarnings(as.numeric(tbl$AICc))
+  tbl$.aicc_tiebreak[!is.finite(tbl$.aicc_tiebreak)] <- Inf
+  tbl <- dplyr::arrange(tbl, .data$score, .data$.engine_tiebreak, .data$.aicc_tiebreak)
+  tbl$.engine_tiebreak <- NULL
+  tbl$.aicc_tiebreak <- NULL
   tbl$rank <- rank(tbl$score, ties.method = "min")
   tbl
 }

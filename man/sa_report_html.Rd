@@ -10,6 +10,8 @@ sa_report_html(
   td_usertype = "td",
   td_candidates = NULL,
   use_fivebest = TRUE,
+  max_specs = NULL,
+  seasonal_only = TRUE,
   title = "Seasonal Adjustment Report",
   outfile = "sa_report.html",
   file = NULL,
@@ -42,6 +44,12 @@ trading-day regressors are used (default \code{"td"}).}
 
 \item{use_fivebest}{Logical. If \code{TRUE}, include the "five best" automatic
 specs in the candidate grid.}
+
+\item{max_specs}{Optional positive integer limiting the number of candidate
+ARIMA specifications fitted.}
+
+\item{seasonal_only}{Logical. If \code{TRUE} (default), filter candidate ARIMA
+specifications to seasonal models before fitting.}
 
 \item{title}{Title of the report shown in the HTML page.}
 
@@ -97,7 +105,7 @@ Notes:
 \item If the provided \emph{current} specification equals the selected \emph{best} model,
 the report omits the "Alternative model" comparison section.
 \item The "Top candidates" table starts with the best model and always includes
-the current model (flagged with a star ★) when one is supplied.
+the current model (flagged as current) when one is supplied.
 }
 }
 \examples{

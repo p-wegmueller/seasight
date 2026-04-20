@@ -11,8 +11,12 @@
 #'   form `"(p d q)(P D Q)"`. If `NULL`, default specs are chosen based
 #'   on the series frequency.
 #' @param use_fivebest Logical. If `TRUE`, a small set of data-driven
-#'   "five best" specs (à la `seasonal::seas(x, x11 = "")`) is added to
+#'   "five best" specs (as in `seasonal::seas(x, x11 = "")`) is added to
 #'   the candidate grid.
+#' @param max_specs Optional positive integer limiting the number of candidate
+#'   ARIMA specifications fitted after de-duplication and seasonal filtering.
+#' @param seasonal_only Logical. If `TRUE` (default), candidate ARIMA
+#'   specifications must have a non-zero seasonal order (`P + D + Q > 0`).
 #' @param auto_outliers Logical. If `TRUE`, enables automatic outlier
 #'   detection in the candidate models.
 #' @param transform_fun Transformation applied to the input series before
@@ -78,6 +82,8 @@
 auto_seasonal_analysis <- function(y,
                                    specs = NULL,
                                    use_fivebest = TRUE,
+                                   max_specs = NULL,
+                                   seasonal_only = TRUE,
                                    auto_outliers = TRUE,
                                    transform_fun = c("auto","log","none"),
                                    td_candidates = NULL,
@@ -118,8 +124,8 @@ auto_seasonal_analysis <- function(y,
                         engine_pref = c("seats","x11","auto")) {
       engine_pref <- match.arg(engine_pref)
       # penalties / normalizations
-      qs_pen  <- ifelse(!is.na(tbl$QS_p), (0.10 - pmin(tbl$QS_p, 0.10)) / 0.10, 0.5)     # <10% → penalty up to 1
-      lb_pen  <- ifelse(!is.na(tbl$LB_p), (0.05 - pmin(tbl$LB_p, 0.05)) / 0.05, 0.5)     # <5% → penalty up to 1
+      qs_pen  <- ifelse(!is.na(tbl$QS_p), (0.10 - pmin(tbl$QS_p, 0.10)) / 0.10, 0.5)     # <10% -> penalty up to 1
+      lb_pen  <- ifelse(!is.na(tbl$LB_p), (0.05 - pmin(tbl$LB_p, 0.05)) / 0.05, 0.5)     # <5% -> penalty up to 1
       lb_pen  <- pmax(lb_pen, 0)                                                          # else 0
       aicc_n  <- .std01(tbl$AICc)                                                         # lower better
       rev_n   <- .std01(tbl$rev_mae)                                                      # lower better
@@ -172,9 +178,86 @@ auto_seasonal_analysis <- function(y,
   if (isTRUE(use_fivebest)) cand <- .fivebest_specs(y)
   if (is.null(specs)) specs <- .default_specs(freq)
   specs <- unique(c(cand, specs))
-  if (!length(specs)) stop("No candidate ARIMA specs available.")
+  if (isTRUE(seasonal_only)) {
+    specs <- specs[vapply(specs, .is_seasonal_arima_spec, logical(1))]
+  }
+  if (!is.null(max_specs)) {
+    max_specs <- as.integer(max_specs)
+    if (!is.finite(max_specs) || max_specs < 1L) {
+      stop("`max_specs` must be a positive integer or NULL.", call. = FALSE)
+    }
+    specs <- utils::head(specs, max_specs)
+  }
+  if (!length(specs)) {
+    reason <- "No seasonal candidate ARIMA specifications remained after applying `seasonal_only = TRUE`."
+    empty_tbl <- tibble::tibble(
+      model_label = "DO_NOT_ADJUST",
+      arima = NA_character_,
+      with_td = FALSE,
+      td_name = NA_character_,
+      with_easter = FALSE,
+      engine = NA_character_,
+      AICc = NA_real_,
+      M7 = NA_real_,
+      IDS = NA_character_,
+      LB_p = NA_real_,
+      SEATS_model_switch = NA,
+      SEATS_has_seasonal = NA,
+      QS_p_x11 = NA_real_,
+      QS_p_seats = NA_real_,
+      QS_p = NA_real_,
+      QSori_p_x11 = NA_real_,
+      QSori_p_seats = NA_real_,
+      QSori_p = NA_real_,
+      QS_p_x11_min_sma = NA_real_,
+      seasonal_amp_pct = NA_real_,
+      vola_reduction_pct = NA_real_,
+      dist_sa_L1 = NA_real_,
+      dist_seas_RMS = NA_real_,
+      corr_seas = NA_real_,
+      td_p = NA_real_,
+      td_sig = FALSE,
+      rev_mae = NA_real_,
+      score = NA_real_,
+      rank = 1,
+      score_raw = NA_real_,
+      score_100 = NA_real_,
+      score_rank = 1
+    )
+    no_adjust <- structure(
+      list(
+        best = NULL,
+        y = y,
+        table = empty_tbl,
+        specs_tried = character(0),
+        frequency = freq,
+        transform = transform_fun,
+        weak_seasonality = TRUE,
+        baseline = list(current_sa = current_sa, current_seasonal = current_seasonal),
+        seasonality = list(
+          overall = tibble::tibble(
+            call_overall = "DO_NOT_ADJUST",
+            share_ids = 0,
+            share_qsori = 0,
+            share_m7_strong = 0,
+            share_m7_weak = 0
+          ),
+          best_model = tibble::tibble(
+            seasonal_ids = FALSE,
+            seasonal_qsori = FALSE,
+            seasonal_m7s = FALSE,
+            seasonal_m7w = FALSE,
+            call_best = "DO_NOT_ADJUST"
+          )
+        ),
+        reason = reason
+      ),
+      class = "auto_seasonal_analysis"
+    )
+    return(no_adjust)
+  }
   
-  # Baseline (current model) — try to pull SA/seasonal for distances
+  # Baseline (current model) - try to pull SA/seasonal for distances
   if (!is.null(current_model)) {
     current_sa       <- tryCatch(seasonal::final(current_model), error = function(e) current_sa)
     # prefer SEATS seasonal; fall back to X-11 seasonal if needed

@@ -13,5 +13,5 @@ sa_engine_choice_card(res)
 An htmltools tag (card).
 }
 \description{
-Explains—in plain language—why the selected engine was chosen for the best model.
+Explains, in plain language, why the selected engine was chosen for the best model.
 }

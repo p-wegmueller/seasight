@@ -1,5 +1,5 @@
 # =============================================================================
-# sa-diagnostics.R — Diagnostics, tests, and copy-paste helpers
+# sa-diagnostics.R - Diagnostics, tests, and copy-paste helpers
 # =============================================================================
 
 # --- Internal: legacy alias (kept for compatibility) --------------------------
@@ -45,7 +45,7 @@ extract_outliers <- function(m) {
 #' Key seasonality diagnostics for a fitted model
 #'
 #' Returns M7, IDS, QS on SA (X-11 & SEATS, plus overall min), QS on original
-#' (X-11 & SEATS, plus overall min), and Ljung–Box p-value on residuals.
+#' (X-11 & SEATS, plus overall min), and Ljung-Box p-value on residuals.
 #'
 #' Columns:
 #' * `M7`, `IDS`
@@ -193,8 +193,8 @@ sa_existence_call <- function(tbl,
 
 #' Build a copy-pasteable seas() call from a fitted model
 #'
-#' * SEATS (default engine) → omit `x11`/`seats` args
-#' * X-11 → include `x11 = ""`
+#' * SEATS (default engine) -> omit `x11`/`seats` args
+#' * X-11 -> include `x11 = ""`
 #'
 #' @param m          Fitted `seas` model.
 #' @param x_expr     Character code for `x=` (e.g. `"y"`).
@@ -244,7 +244,7 @@ sa_copyable_call <- function(m, x_expr, xreg_expr = NA,
   cl <- drop_args(cl, c("x11", "seats", "seats.noadmiss"))
   if (eng == "x11") {
     cl <- set_arg(cl, "x11", "")
-  } # SEATS: add nothing — it's default
+  } # SEATS: add nothing - it is default
   
   # optional force.type
   if (isTRUE(include_force)) cl <- set_arg(cl, "force.type", "denton")
@@ -252,7 +252,7 @@ sa_copyable_call <- function(m, x_expr, xreg_expr = NA,
   paste(deparse(cl, width.cutoff = 500L), collapse = "\n")
 }
 
-# --- Row-level “Do Not Adjust” check (exported wrapper) -----------------------
+# --- Row-level "Do Not Adjust" check (exported wrapper) -----------------------
 
 #' Row-level non-adjustment rule (wrapper)
 #'

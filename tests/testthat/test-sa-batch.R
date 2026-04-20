@@ -54,7 +54,33 @@ test_that("sa_batch_run supports resume skip behavior", {
 test_that("path and message sanitizers are stable", {
   expect_equal(seasight:::.safe_path_id("bad:name/with*chars"), "bad_name_with_chars")
   expect_equal(seasight:::.safe_path_id("   "), "series")
+  expect_equal(seasight:::.safe_path_id("CON"), "CON_")
+  expect_equal(seasight:::.safe_path_id("bad\nname"), "bad_name")
   expect_equal(seasight:::.strip_ansi("\033[31mred\033[39m"), "red")
+})
+
+test_that("sa_batch_run records per-series timeouts", {
+  skip_if_not_installed("callr")
+  out_dir <- file.path(tempdir(), paste0("seasight-batch-timeout-", Sys.getpid(), "-", as.integer(stats::runif(1, 1, 1e6))))
+
+  slow_report <- function(y, outfile, ...) {
+    Sys.sleep(5)
+    writeLines("late", outfile)
+    invisible(list(report = outfile))
+  }
+
+  res <- sa_batch_run(
+    series = list(slow = 1:3),
+    out_dir = out_dir,
+    resume = FALSE,
+    timeout = 0.25,
+    report_fun = slow_report
+  )
+
+  expect_false(res$ok)
+  expect_equal(res$status, "timeout")
+  expect_equal(res$reason, "timeout")
+  expect_false(file.exists(res$outfile))
 })
 
 test_that("probe_case writes via report_fun and returns normalized path", {

@@ -14,7 +14,7 @@ A one-row tibble with the diagnostics above.
 }
 \description{
 Returns M7, IDS, QS on SA (X-11 & SEATS, plus overall min), QS on original
-(X-11 & SEATS, plus overall min), and Ljung–Box p-value on residuals.
+(X-11 & SEATS, plus overall min), and Ljung-Box p-value on residuals.
 }
 \details{
 Columns:

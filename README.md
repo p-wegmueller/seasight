@@ -180,8 +180,4 @@ Feedback from practitioners is welcome, especially from statistical offices, cen
 
 ## License
 
-<<<<<<< Updated upstream
 This package is released under the MIT License. See `LICENSE`.
-=======
-This package is released under the MIT License (see `LICENSE`).
->>>>>>> Stashed changes

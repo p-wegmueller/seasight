@@ -10,6 +10,12 @@
 .chip-prev { background:#eff6ff; color:#1e40af; border-color:#bfdbfe; }"
 }
 
+.image_uri_and_unlink <- function(path) {
+  uri <- knitr::image_uri(path)
+  unlink(path, force = TRUE)
+  uri
+}
+
 #' Build the Seasonal Adjustment HTML report (engine)
 #'
 #' Internal workhorse that renders the HTML report. Most users should call
@@ -24,6 +30,8 @@ sa_issue_report_html <- function(
     td_usertype = "td",
     td_candidates = NULL,
     use_fivebest = TRUE,
+    max_specs = NULL,
+    seasonal_only = TRUE,
     title = "Seasonal Adjustment Report",
     outfile = "sa_report.html",
     file = NULL,
@@ -140,6 +148,8 @@ sa_issue_report_html <- function(
     res <- auto_seasonal_analysis(
       y = y,
       use_fivebest = use_fivebest,
+      max_specs = max_specs,
+      seasonal_only = seasonal_only,
       auto_outliers = TRUE,
       include_easter = include_easter,
       easter_len = easter_len,
@@ -162,9 +172,10 @@ sa_issue_report_html <- function(
   best_r     <- dplyr::slice(candidates, 1)
   best       <- res$best
   
-  best_engine  <- toupper(.engine_used(best))
+  best_engine  <- if (is.null(best)) "n/a" else toupper(.engine_used(best))
   best_has_td  <- isTRUE(best_r$with_td)
-  best_td_name <- if (best_has_td) (best_r$td_label %||% best_r$td_name %||% NULL) else NULL
+  best_td_name <- if (best_has_td) (best_r$td_name %||% NULL) else NULL
+  best_td_label <- if (best_has_td) (best_r$td_label %||% best_r$td_name %||% NULL) else NULL
   
   # Try to recover the incumbent id robustly from result structure
   incumbent_spec_id <- res$incumbent_spec_id %||% res$current_spec_id %||% {
@@ -227,7 +238,7 @@ sa_issue_report_html <- function(
     best_spec_code <- sa_copyable_call(
       best,
       x_expr    = y_expr,
-      xreg_expr = if (best_has_td) best_td_name else NULL,
+      xreg_expr = if (best_has_td && !is.null(best_td_name)) best_td_name else if (best_has_td) NA else NULL,
       include_force = FALSE,
       engine = "auto"
     )
@@ -303,7 +314,7 @@ sa_issue_report_html <- function(
       graphics::legend("topleft", legend = c("current","New"),
                        col = c("black","firebrick"), lty = 1, lwd = 2, bty = "n")
       grDevices::dev.off()
-      img_cmp_sa <- htmltools::img(src = knitr::image_uri(p_cmp_sa),
+      img_cmp_sa <- htmltools::img(src = .image_uri_and_unlink(p_cmp_sa),
                                    style = "max-width:100%;height:auto;border-radius:12px;")
     } else {
       img_cmp_sa <- htmltools::tags$p(class = "sub",
@@ -323,7 +334,7 @@ sa_issue_report_html <- function(
       graphics::legend("topleft", legend = c("current","New"),
                        col = c("gray25","royalblue"), lty = 1, lwd = 2, bty = "n")
       grDevices::dev.off()
-      img_cmp_pc <- htmltools::img(src = knitr::image_uri(p_cmp_pc),
+      img_cmp_pc <- htmltools::img(src = .image_uri_and_unlink(p_cmp_pc),
                                    style = "max-width:100%;height:auto;border-radius:12px;")
       stats_tbl_html <- .build_growth_stats_table(al_pc$prev, al_pc$new)
     } else {
@@ -340,8 +351,8 @@ sa_issue_report_html <- function(
   if (!no_sa && !is.null(best)) {
     grDevices::png(p_best_main, width = png_width, height = png_height);  graphics::plot(best);      grDevices::dev.off()
     grDevices::png(p_best_mon,  width = png_width, height = png_height);  stats::monthplot(best);     grDevices::dev.off()
-    img_best_main <- htmltools::img(src = knitr::image_uri(p_best_main), style = "max-width:100%;height:auto;border-radius:12px;")
-    img_best_mon  <- htmltools::img(src = knitr::image_uri(p_best_mon),  style = "max-width:100%;height:auto;border-radius:12px;")
+    img_best_main <- htmltools::img(src = .image_uri_and_unlink(p_best_main), style = "max-width:100%;height:auto;border-radius:12px;")
+    img_best_mon  <- htmltools::img(src = .image_uri_and_unlink(p_best_mon),  style = "max-width:100%;height:auto;border-radius:12px;")
   } else {
     img_best_main <- img_best_mon <- NULL
   }
@@ -352,8 +363,8 @@ sa_issue_report_html <- function(
     p_prev_mon  <- tempfile(fileext = ".png")
     grDevices::png(p_prev_main, width = png_width, height = png_height); graphics::plot(current_model);      grDevices::dev.off()
     grDevices::png(p_prev_mon,  width = png_width, height = png_height); stats::monthplot(current_model);     grDevices::dev.off()
-    img_prev_main <- htmltools::img(src = knitr::image_uri(p_prev_main), style = "max-width:100%;height:auto;border-radius:12px;")
-    img_prev_mon  <- htmltools::img(src = knitr::image_uri(p_prev_mon),  style = "max-width:100%;height:auto;border-radius:12px;")
+    img_prev_main <- htmltools::img(src = .image_uri_and_unlink(p_prev_main), style = "max-width:100%;height:auto;border-radius:12px;")
+    img_prev_mon  <- htmltools::img(src = .image_uri_and_unlink(p_prev_mon),  style = "max-width:100%;height:auto;border-radius:12px;")
   }
   
   # 6) Narrative & tables (make TD/amp lines DNA-aware)
@@ -391,7 +402,7 @@ sa_issue_report_html <- function(
       "Trading-day regressor: not included."
     } else {
       glue::glue(
-        "Trading-day regressor: {htmltools::htmlEscape(best_td_name)}; ",
+        "Trading-day regressor: {htmltools::htmlEscape(best_td_label)}; ",
         "p = {.flagP(best_r$td_p, 0.05)}."
       )
     }
@@ -519,7 +530,7 @@ document.addEventListener('click', function(e){
                                                                         if (!is.null(ui_exist$note)) htmltools::div(htmltools::HTML(paste0("<b>Note</b>: ", htmltools::htmlEscape(ui_exist$note)))),
                                                                         if (!is.null(decision_reason)) htmltools::div(htmltools::HTML(paste0("<b>Reason</b>: ", decision_reason))),
                                                                         htmltools::HTML(paste0("<b>Best candidate (by score)</b>: ", if (no_sa) "n/a" else sprintf("<span class='mono nowrap'>%s</span>", htmltools::htmlEscape(best_arima_disp)))),
-                                                                        htmltools::div(htmltools::HTML(paste0("<b>TD regressor</b>: ", if (no_sa) "n/a" else td_line))),
+                                                                        htmltools::div(htmltools::HTML(paste0("<b>TD regressor</b>: ", if (no_sa) "n/a" else if (best_has_td) htmltools::htmlEscape(best_td_label) else "not included"))),
                                                                         htmltools::div(htmltools::HTML(paste0("<b>AICc</b>: ",       if (no_sa) "n/a" else .num(best_r$AICc,2)))),
                                                                         htmltools::div(htmltools::HTML(paste0("<b>Ljung-Box p</b>: ", if (no_sa) "n/a" else .flagP(best_r$LB_p, 0.05)))),
                                                                         htmltools::div(htmltools::HTML(paste0("<b>Engine</b>: ",     if (no_sa) "n/a" else best_engine))),
@@ -669,7 +680,7 @@ document.addEventListener('click', function(e){
 #' - If the provided *current* specification equals the selected *best* model,
 #'   the report omits the "Alternative model" comparison section.
 #' - The "Top candidates" table starts with the best model and always includes
-#'   the current model (flagged with a star ★) when one is supplied.
+#'   the current model (flagged as current) when one is supplied.
 #'
 #' @param y Time series to be analysed. Can be a `ts` object or anything that
 #'   `tsbox::ts_ts()` can convert to `ts`.
@@ -681,6 +692,10 @@ document.addEventListener('click', function(e){
 #'   (e.g. `list(wd = wd.m, wd1 = wd1.m)`), each aligned with `y`.
 #' @param use_fivebest Logical. If `TRUE`, include the "five best" automatic
 #'   specs in the candidate grid.
+#' @param max_specs Optional positive integer limiting the number of candidate
+#'   ARIMA specifications fitted.
+#' @param seasonal_only Logical. If `TRUE` (default), filter candidate ARIMA
+#'   specifications to seasonal models before fitting.
 #' @param title Title of the report shown in the HTML page.
 #' @param outfile Path to the HTML file to be written.
 #' @param png_width,png_height Width and height (in pixels) of PNG plots
@@ -720,6 +735,8 @@ sa_report_html <- function(
     td_usertype = "td",
     td_candidates = NULL,
     use_fivebest = TRUE,
+    max_specs = NULL,
+    seasonal_only = TRUE,
     title = "Seasonal Adjustment Report",
     outfile = "sa_report.html",
     file = NULL,
@@ -742,6 +759,8 @@ sa_report_html <- function(
     td_usertype   = td_usertype,
     td_candidates = td_candidates,
     use_fivebest  = use_fivebest,
+    max_specs     = max_specs,
+    seasonal_only = seasonal_only,
     title         = title,
     outfile       = outfile,
     png_width     = png_width,
@@ -767,7 +786,7 @@ sa_report_html <- function(
 #' model** (if supplied) even if it is not in the top `n`. The airline
 #' reference model ARIMA (0 1 1)(0 1 1) is also appended if absent.
 #'
-#' Rows are lightly shaded: ✓ best (green), ★ current (blue), airline (red).
+#' Rows are lightly shaded: best (green), current (blue), airline (red).
 #'
 #' @param res Result of [auto_seasonal_analysis()].
 #' @param current_model Optional fitted [seasonal::seas] model to mark as "current".

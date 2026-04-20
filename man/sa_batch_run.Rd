@@ -9,6 +9,7 @@ sa_batch_run(
   out_dir = "sa_reports",
   ids = NULL,
   resume = TRUE,
+  timeout = Inf,
   report_fun = sa_report_html,
   log_file = NULL,
   ...
@@ -22,6 +23,10 @@ sa_batch_run(
 \item{ids}{Optional character vector of IDs, same length as \code{series}.}
 
 \item{resume}{If \code{TRUE}, existing output files are skipped and logged as \code{skipped}.}
+
+\item{timeout}{Per-series timeout in seconds. Use \code{Inf} to run in the current
+R process without a timeout. Finite values require the suggested \code{callr}
+package and run each case in a clean subprocess.}
 
 \item{report_fun}{Report function to call per item. Defaults to \code{\link[=sa_report_html]{sa_report_html()}}.}
 

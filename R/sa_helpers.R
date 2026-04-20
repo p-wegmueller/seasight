@@ -259,31 +259,20 @@
   # ---- user xreg: align to y and build mts ----------------------------------
   td_used <- FALSE
   if (!is.null(td_xreg)) {
-    xr <- tryCatch(tsbox::ts_ts(td_xreg), error = function(e) NULL)
-    
-    if (is.null(xr) || !inherits(xr, "ts")) {
-      warning("Skipping td_xreg: not ts-boxable / not a ts.")
-    } else if (stats::frequency(xr) != freq) {
-      warning(sprintf("Skipping td_xreg: frequency mismatch (xreg=%s, y=%s).",
-                      stats::frequency(xr), freq))
+    xr <- sa_align_regressor(y, td_xreg)
+
+    if (is.null(xr)) {
+      warning("Skipping td_xreg: could not align to y.")
     } else {
-      xr <- tryCatch(stats::window(xr, start = stats::start(y), end = stats::end(y)),
-                     error = function(e) NULL)
-      
-      # IMPORTANT: for multicol xreg, use NROW not length()
-      if (is.null(xr) || NROW(xr) != length(y)) {
-        warning("Skipping td_xreg: could not align to y (length/start/end mismatch).")
-      } else {
-        xmat <- as.matrix(xr)  # preserves multicol
-        if (is.null(colnames(xmat))) {
-          colnames(xmat) <- paste0("xreg", seq_len(ncol(xmat)))
-        }
-        xreg_y <- stats::ts(xmat, start = stats::start(y), frequency = freq)
-        
-        call_args$xreg <- xreg_y
-        call_args$regression.usertype <- rep(td_usertype, ncol(xreg_y))
-        td_used <- TRUE
+      xmat <- as.matrix(xr)  # preserves multicol
+      if (is.null(colnames(xmat))) {
+        colnames(xmat) <- paste0("xreg", seq_len(ncol(xmat)))
       }
+      xreg_y <- stats::ts(xmat, start = stats::start(y), frequency = freq)
+
+      call_args$xreg <- xreg_y
+      call_args$regression.usertype <- rep(td_usertype, ncol(xreg_y))
+      td_used <- TRUE
     }
   }
   
@@ -739,6 +728,39 @@ seasonality_summary <- function(tbl, majority = 0.6) {
   }
 }
 
+#' Align a regressor to a target series
+#'
+#' Standardizes user-supplied regressors before they are passed to X-13. The
+#' helper checks frequency, windows the regressor to the span of `y`, and returns
+#' `NULL` if the result cannot be aligned exactly.
+#'
+#' @param y Target series, coercible to `ts`.
+#' @param x Regressor series, coercible to `ts`.
+#'
+#' @return A `ts` object aligned to `y`, or `NULL` when alignment fails.
+#' @export
+sa_align_regressor <- function(y, x) {
+  y <- tryCatch(tsbox::ts_ts(y), error = function(e) NULL)
+  x <- tryCatch(tsbox::ts_ts(x), error = function(e) NULL)
+
+  if (is.null(y) || is.null(x) || !inherits(y, "ts") || !inherits(x, "ts")) {
+    return(NULL)
+  }
+
+  y_freq <- stats::frequency(y)
+  x_freq <- stats::frequency(x)
+  if (!is.finite(y_freq) || !is.finite(x_freq) || y_freq != x_freq) {
+    return(NULL)
+  }
+
+  out <- tryCatch(
+    stats::window(x, start = stats::start(y), end = stats::end(y)),
+    error = function(e) NULL
+  )
+  if (is.null(out) || NROW(out) != length(y)) return(NULL)
+  stats::ts(as.matrix(out), start = stats::start(y), frequency = y_freq)
+}
+
 # Ensure td_candidates is a named list of ts with same freq/length as y
 .normalize_td_candidates <- function(td_candidates, y, td_usertype = "td") {
   if (is.null(td_candidates)) return(NULL)
@@ -753,18 +775,23 @@ seasonality_summary <- function(tbl, majority = 0.6) {
     names(td_candidates) <- nm
   }
   
-  yfreq <- stats::frequency(y); tspy <- stats::tsp(y)
-  
   td_candidates <- lapply(td_candidates, function(x) {
     if (is.null(x)) stop("`td_candidates` entries must not be NULL.")
-    xt <- try(tsbox::ts_ts(x), silent = TRUE)
-    if (inherits(xt, "try-error")) stop("A td_candidates entry is not ts-boxable.")
-    if (stats::frequency(xt) != yfreq) stop("All td_candidates must have same frequency as y.")
-    stats::window(xt, start = tspy[1], end = tspy[2])
+    xt <- sa_align_regressor(y, x)
+    if (is.null(xt)) {
+      stop("All td_candidates must be ts-boxable, have the same frequency as y, and align to y.")
+    }
+    xt
   })
   
   attr(td_candidates, "td_usertype") <- td_usertype
   td_candidates
+}
+
+.is_seasonal_arima_spec <- function(spec) {
+  nums <- regmatches(spec, gregexpr("-?[0-9]+", spec, perl = TRUE))[[1]]
+  nums <- suppressWarnings(as.integer(nums))
+  length(nums) >= 6L && any(nums[4:6] > 0L, na.rm = TRUE)
 }
 
 .td_is_compatible <- function(y, xr) {

@@ -28,7 +28,7 @@ A single string containing the \code{seas(...)} call.
 }
 \description{
 \itemize{
-\item SEATS (default engine) → omit \code{x11}/\code{seats} args
-\item X-11 → include \code{x11 = ""}
+\item SEATS (default engine) -> omit \code{x11}/\code{seats} args
+\item X-11 -> include \code{x11 = ""}
 }
 }
