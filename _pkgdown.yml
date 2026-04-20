@@ -79,6 +79,10 @@ articles:
   - title: "Seasonal adjustment in practice"
     contents:
       - seasight-sa-practice
+
+  - title: "No apparent seasonality"
+    contents: 
+      - seasight-seats-absent
   
 
 authors:
