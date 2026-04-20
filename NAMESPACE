@@ -3,6 +3,8 @@
 export(auto_seasonal_analysis)
 export(build_user_xreg)
 export(extract_outliers)
+export(probe_case)
+export(sa_batch_run)
 export(sa_compare)
 export(sa_copyable_call)
 export(sa_engine_choice_card)
