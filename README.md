@@ -19,6 +19,17 @@
 
 Status: `seasight` is under active development. The user-facing API may still change before the first CRAN release.
 
+## Development workflow notes
+
+When batching maintenance work, group related fixes together, but keep
+**report/UI rendering changes** in separate batches from **core
+helper/diagnostic logic** changes. This keeps reviews focused and makes
+regression risk easier to assess.
+
+For every report/UI-focused batch, include a short **manual review
+checklist** describing the rendered elements to verify locally (for
+example cards, plots, tables, labels, and decision pills).
+
 ## Installation
 
 ```r
@@ -169,4 +180,8 @@ Feedback from practitioners is welcome, especially from statistical offices, cen
 
 ## License
 
+<<<<<<< Updated upstream
 This package is released under the MIT License. See `LICENSE`.
+=======
+This package is released under the MIT License (see `LICENSE`).
+>>>>>>> Stashed changes

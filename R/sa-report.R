@@ -2,6 +2,14 @@
 # sa-report.R Build the Seasonal Adjustment HTML report
 # =============================================================================
 
+# Shared CSS for report tables/chips.
+.report_shared_css <- function() {
+  ".tbl-note { color:#6b7280; margin-top:6px; }
+.chip { padding:4px 10px; border-radius:999px; font-size:12px; border:1px solid #e5e7eb; }
+.chip-best { background:#ecfdf5; color:#065f46; border-color:#a7f3d0; }
+.chip-prev { background:#eff6ff; color:#1e40af; border-color:#bfdbfe; }"
+}
+
 #' Build the Seasonal Adjustment HTML report (engine)
 #'
 #' Internal workhorse that renders the HTML report. Most users should call
@@ -452,10 +460,6 @@ sa_issue_report_html <- function(
 
 /* small legend chips */
 .legend { margin-top:10px; display:flex; gap:10px; flex-wrap:wrap; }
-.chip { padding:4px 10px; border-radius:999px; font-size:12px; border:1px solid #e5e7eb; }
-.chip-best { background:#ecfdf5; color:#065f46; border-color:#a7f3d0; }
-.chip-prev { background:#eff6ff; color:#1e40af; border-color:#bfdbfe; }
-.tbl-note { color:#6b7280; margin-top:6px; }
 
 /* copy button */
 .copy-wrap { position: relative; }
@@ -466,7 +470,8 @@ sa_issue_report_html <- function(
 }
 .copy-btn:hover { background: #eee; }
 .copy-btn.copied { background: #e6ffed; border-color: #a4e8b1; }
-        ")),
+")),
+                           htmltools::tags$style(htmltools::HTML(.report_shared_css())),
                            htmltools::tags$script(htmltools::HTML("
 document.addEventListener('click', function(e){
   const btn = e.target.closest('.copy-btn');
@@ -514,7 +519,7 @@ document.addEventListener('click', function(e){
                                                                         if (!is.null(ui_exist$note)) htmltools::div(htmltools::HTML(paste0("<b>Note</b>: ", htmltools::htmlEscape(ui_exist$note)))),
                                                                         if (!is.null(decision_reason)) htmltools::div(htmltools::HTML(paste0("<b>Reason</b>: ", decision_reason))),
                                                                         htmltools::HTML(paste0("<b>Best candidate (by score)</b>: ", if (no_sa) "n/a" else sprintf("<span class='mono nowrap'>%s</span>", htmltools::htmlEscape(best_arima_disp)))),
-                                                                        htmltools::div(htmltools::HTML(paste0("<b>TD</b>: ",         if (no_sa) "n/a" else ifelse(best_r$with_td,"yes","no")))),
+                                                                        htmltools::div(htmltools::HTML(paste0("<b>TD regressor</b>: ", if (no_sa) "n/a" else td_line))),
                                                                         htmltools::div(htmltools::HTML(paste0("<b>AICc</b>: ",       if (no_sa) "n/a" else .num(best_r$AICc,2)))),
                                                                         htmltools::div(htmltools::HTML(paste0("<b>Ljung-Box p</b>: ", if (no_sa) "n/a" else .flagP(best_r$LB_p, 0.05)))),
                                                                         htmltools::div(htmltools::HTML(paste0("<b>Engine</b>: ",     if (no_sa) "n/a" else best_engine))),
@@ -602,7 +607,6 @@ document.addEventListener('click', function(e){
                                             htmltools::tags$p(ids_line),
                                             htmltools::tags$p(m7_line),
                                             htmltools::tags$p(htmltools::HTML(lb_line)),
-                                            htmltools::tags$p(htmltools::HTML(td_line)),
                                             htmltools::tags$p(htmltools::HTML(ol_rule_line)),
                                             htmltools::tags$p(amp_line),
                                             htmltools::tags$p(dist_line)
@@ -790,6 +794,10 @@ sa_top_candidates_table <- function(res, current_model = NULL, y = NULL, n = 5) 
   
   # Always work from a coalesced table so we have the widest set of columns
   tbl <- tryCatch(.coalesce_arima_cols(res$table), error = function(e) res$table)
+  if ("score_100" %in% names(tbl) && any(is.finite(tbl$score_100))) {
+    tbl <- dplyr::arrange(tbl, dplyr::desc(.data$score_100))
+  }
+  n_total <- nrow(tbl)
   
   # ---------- NEW: build a robust ARIMA display string per row ----------
   .arima_from_row <- function(row){
@@ -821,10 +829,13 @@ sa_top_candidates_table <- function(res, current_model = NULL, y = NULL, n = 5) 
   }
   # compute safe arima strings for *all* rows once
   tbl$arima <- vapply(seq_len(nrow(tbl)), function(i) .arima_from_row(tbl[i, , drop = FALSE]), character(1))
+  if ("score_100" %in% names(tbl) && any(is.finite(tbl$score_100))) {
+    tbl <- dplyr::arrange(tbl, dplyr::desc(.data$score_100))
+  }
   # ----------------------------------------------------------------------
   
   disp_cols <- c(
-    "model_label","arima","with_td","AICc","LB_p",
+    "model_label","arima","with_td","score_100","AICc","LB_p",
     "QSori_p","QS_p_x11","QS_p_seats","QS_p",
     "td_p","vola_reduction_pct","seasonal_amp_pct","dist_sa_L1","rev_mae"
   )
@@ -870,6 +881,7 @@ sa_top_candidates_table <- function(res, current_model = NULL, y = NULL, n = 5) 
         model_label = "current",
         arima       = normalize(prev_arima),
         with_td     = has_td,
+        score_100   = NA_real_,
         AICc        = AICc,
         LB_p        = LBp
       ) |>
@@ -889,6 +901,7 @@ sa_top_candidates_table <- function(res, current_model = NULL, y = NULL, n = 5) 
   
   # Row flags/classes \u2014 ALWAYS length nrow(top)
   n_top <- nrow(top)
+  n_hidden <- max(0L, n_total - n_top)
   best_label <- if ("model_label" %in% names(tbl)) tbl$model_label[1] else NA_character_
   
   if ("model_label" %in% names(top) && !is.na(best_label)) {
@@ -902,7 +915,7 @@ sa_top_candidates_table <- function(res, current_model = NULL, y = NULL, n = 5) 
   top$is_airline <- normalize(top$arima) == normalize(airline_arima)
   
   # ---- Render table ----
-  th <- c("Label","ARIMA","TD","AICc","LB p",
+  th <- c("Label","ARIMA","TD","Score (0-100)","AICc","LB p",
           "QSori p","QS X-11 p","QS SEATS p","QS (min)","TD p",
           "Volatility \u2193 %","Seasonal amp %","L1 vs prev SA","Rev MAE")
   header <- htmltools::tags$tr(lapply(th, htmltools::tags$th))
@@ -919,6 +932,7 @@ sa_top_candidates_table <- function(res, current_model = NULL, y = NULL, n = 5) 
       htmltools::tags$td(html_escape(r$model_label)),
       htmltools::tags$td(htmltools::tags$span(style = "white-space:nowrap;", html_escape(r$arima))),
       htmltools::tags$td(ifelse(isTRUE(r$with_td), "yes", "no")),
+      htmltools::tags$td(.num(r$score_100, 1)),
       htmltools::tags$td(.num(r$AICc, 2)),
       htmltools::tags$td(.fmtP(r$LB_p)),
       htmltools::tags$td(.fmtP(r$QSori_p)),
@@ -946,12 +960,14 @@ sa_top_candidates_table <- function(res, current_model = NULL, y = NULL, n = 5) 
     htmltools::span(class="chip chip-airline", "Airline model")
   )
   
-  styles <- htmltools::tags$style(htmltools::HTML(
-    ".tbl-colored .row-airline td { background:#fff1f2; }
+  styles <- htmltools::tags$style(htmltools::HTML(paste0(
+    .report_shared_css(),
+    "
+.tbl-colored .row-airline td { background:#fff1f2; }
      .chip-airline{ background:#fee2e2 !important; color:#991b1b !important; border:1px solid #fecaca !important; }
      .tbl-colored th, .tbl-colored td { vertical-align: middle; }
      .tbl-colored th:nth-child(2), .tbl-colored td:nth-child(2){ white-space:nowrap; min-width:200px; }"
-  ))
+  )))
   
   foot <- htmltools::tags$p(
     class = "tbl-note",
@@ -962,7 +978,16 @@ sa_top_candidates_table <- function(res, current_model = NULL, y = NULL, n = 5) 
     )
   )
   
-  htmltools::tagList(styles, table_tag, legend, foot)
+  filtered_foot <- if (n_hidden > 0L) htmltools::tags$p(
+    class = "tbl-note",
+    htmltools::HTML(paste0(
+      "Showing top <b>", n_top, "</b> of <b>", n_total,
+      "</b> candidates; the remaining <b>", n_hidden,
+      "</b> lower-ranked candidates are hidden for readability."
+    ))
+  )
+  
+  htmltools::tagList(styles, table_tag, legend, foot, filtered_foot)
 }
 
 
@@ -996,7 +1021,7 @@ sa_top_candidates_table <- function(res, current_model = NULL, y = NULL, n = 5) 
     prev_is_best <- isTRUE(get1(br, "arima") == prev_arima || get1(br, "ARIMA_disp") == prev_arima)
   }
   
-  gap_score <- if (!is.null(sr)) get1(sr, "score") - get1(br, "score") else NA_real_
+  gap_score <- if (!is.null(sr)) get1(br, "score_100") - get1(sr, "score_100") else NA_real_
   gap_aicc  <- if (!is.null(sr)) get1(sr, "AICc")  - get1(br, "AICc")  else NA_real_
   
   qs_x11   <- get1(br, "QS_p_x11")
@@ -1017,8 +1042,8 @@ sa_top_candidates_table <- function(res, current_model = NULL, y = NULL, n = 5) 
           "<b>Selection rationale.</b> The chosen specification is <code>ARIMA ",
           htmltools::htmlEscape(arima_best), "</code> ",
           if (with_td) "with trading-day (TD) regressor" else "without TD",
-          ", selected because it achieved the <b>lowest composite score</b> among candidates",
-          if (!is.na(gap_score)) paste0(" (margin vs. next best: ", sprintf("%.3f", gap_score), ", lower is better)") else "",
+          ", selected because it achieved the <b>highest overall score (0–100; higher is better)</b> among candidates",
+          if (!is.na(gap_score)) paste0(" (margin vs. next best: ", sprintf("%.1f", gap_score), " points)") else "",
           ". The composite score prioritises residual seasonality (QS), residual autocorrelation (Ljung-Box), model parsimony (AICc), ",
           "stability under history extension (revision MAE), and proximity to the incumbent seasonal adjustment (L1 distance)."
         )

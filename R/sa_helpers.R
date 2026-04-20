@@ -49,6 +49,16 @@
   )
 }
 
+# Safe extractor for QS p-values from seasonal::qs() output.
+# Returns NA_real_ on any failure.
+.safe_qs_pval <- function(m, row = "qsori", col = "p-val") {
+  out <- tryCatch(seasonal::qs(m), error = function(e) NULL)
+  if (is.null(out)) return(NA_real_)
+  if (!is.matrix(out) && !is.data.frame(out)) return(NA_real_)
+  if (!(row %in% rownames(out)) || !(col %in% colnames(out))) return(NA_real_)
+  suppressWarnings(as.numeric(out[row, col]))
+}
+
 # Residual seasonality (QS) on the SA series, via both engines
 .qs_on_sa_both <- function(m) {
   sa <- try(seasonal::final(m), silent = TRUE)
@@ -58,13 +68,13 @@
   
   p_x11 <- try({
     mx <- seasonal::seas(sa, x11 = "")
-    as.numeric(seasonal::qs(mx)["qsori", "p-val"])
+    .safe_qs_pval(mx)
   }, silent = TRUE)
   if (inherits(p_x11, "try-error")) p_x11 <- NA_real_
   
   p_seats <- try({
     ms <- seasonal::seas(sa)  # default SEATS
-    as.numeric(seasonal::qs(ms)["qsori", "p-val"])
+    .safe_qs_pval(ms)
   }, silent = TRUE)
   if (inherits(p_seats, "try-error")) p_seats <- NA_real_
   
@@ -93,23 +103,21 @@
 }
 
 .has_seats_model_switch_msg <- function(m) {
-  # Robust: must never crash, even if summary()/qs() is broken for this model.
-  tryCatch({
-    out <- tryCatch(
-      utils::capture.output(suppressMessages(summary(m))),
-      error = function(e) character(0)
-    )
-    
-    if (!length(out)) return(NA)
-    
-    # seasonal has used both phrasings depending on version/output
-    any(
-      grepl("Model used in SEATS is different", out, fixed = TRUE) |
-        grepl("Model used for SEATS is different", out, fixed = TRUE)
-    )
-  }, error = function(e) {
-    NA
-  })
+  # Robust and summary()-free: infer from UDG keys if present.
+  u <- tryCatch(seasonal::udg(m), error = function(e) NULL)
+  if (is.null(u)) return(NA)
+  nms <- tolower(names(u))
+  if (is.null(nms)) return(NA)
+  
+  key_idx <- grep("seats.*(model|mdl).*(switch|chang|diff)|model.*seats.*(switch|chang|diff)", nms)
+  if (!length(key_idx)) return(NA)
+  
+  v <- u[[key_idx[1]]]
+  if (is.logical(v) && length(v) == 1L) return(v)
+  vv <- tolower(as.character(v)[1])
+  if (vv %in% c("yes", "true", "1")) return(TRUE)
+  if (vv %in% c("no", "false", "0")) return(FALSE)
+  NA
 }
 
 # QS on the ORIGINAL series, tested with both engines
@@ -123,9 +131,9 @@
   mseas <- try(seasonal::seas(x_orig),            silent = TRUE)
   
   p_x11 <- if (!inherits(mx11, "try-error"))
-    tryCatch(as.numeric(seasonal::qs(mx11)["qsori","p-val"]), error = function(e) NA_real_) else NA_real_
+    .safe_qs_pval(mx11) else NA_real_
   p_seats <- if (!inherits(mseas, "try-error"))
-    tryCatch(as.numeric(seasonal::qs(mseas)["qsori","p-val"]), error = function(e) NA_real_) else NA_real_
+    .safe_qs_pval(mseas) else NA_real_
   
   overall <- if (all(is.na(c(p_x11, p_seats)))) NA_real_ else suppressWarnings(min(p_x11, p_seats, na.rm = TRUE))
   
@@ -142,7 +150,7 @@
     tryCatch(
       {
         mx <- seasonal::seas(seasonal::final(m), x11 = "", x11.seasonalma = opt)
-        as.numeric(seasonal::qs(mx)["qsori","p-val"])
+        .safe_qs_pval(mx)
       },
       error = function(e) NA_real_
     )
@@ -734,25 +742,26 @@ seasonality_summary <- function(tbl, majority = 0.6) {
 # Ensure td_candidates is a named list of ts with same freq/length as y
 .normalize_td_candidates <- function(td_candidates, y, td_usertype = "td") {
   if (is.null(td_candidates)) return(NULL)
-  stopifnot(is.list(td_candidates))
+  if (!is.list(td_candidates)) stop("`td_candidates` must be a list.")
+  if (!length(td_candidates)) stop("`td_candidates` must not be an empty list.")
   
-  if (is.null(names(td_candidates)) || any(!nzchar(names(td_candidates)))) {
-    names(td_candidates) <- paste0("td", seq_along(td_candidates))
+  nm <- names(td_candidates)
+  if (is.null(nm)) nm <- rep("", length(td_candidates))
+  if (any(!nzchar(nm))) {
+    idx <- which(!nzchar(nm))
+    nm[idx] <- paste0("td", idx)
+    names(td_candidates) <- nm
   }
   
   yfreq <- stats::frequency(y); tspy <- stats::tsp(y)
   
   td_candidates <- lapply(td_candidates, function(x) {
-    if (is.null(x)) return(NULL)
+    if (is.null(x)) stop("`td_candidates` entries must not be NULL.")
     xt <- try(tsbox::ts_ts(x), silent = TRUE)
     if (inherits(xt, "try-error")) stop("A td_candidates entry is not ts-boxable.")
     if (stats::frequency(xt) != yfreq) stop("All td_candidates must have same frequency as y.")
     stats::window(xt, start = tspy[1], end = tspy[2])
   })
-  
-  keep <- vapply(td_candidates, function(z) !is.null(z), logical(1))
-  td_candidates <- td_candidates[keep]
-  if (!length(td_candidates)) return(NULL)
   
   attr(td_candidates, "td_usertype") <- td_usertype
   td_candidates
@@ -792,16 +801,12 @@ seasonality_summary <- function(tbl, majority = 0.6) {
 .obs_n <- function(m) {
   n <- try(length(stats::na.omit(seasonal::original(m))), silent = TRUE)
   if (!inherits(n, "try-error")) return(n)
-  s <- capture.output(suppressMessages(summary(m)))
-  ln <- grep("Obs\\.:", s, value = TRUE); if (!length(ln)) return(NA_integer_)
-  as.integer(gsub("[^0-9]", "", ln[1]))
+  NA_integer_
 }
 
 .shapiro_stat <- function(m) {
-  s <- capture.output(suppressMessages(summary(m)))
-  ln <- grep("Shapiro \\(normality\\):", s, value = TRUE)
-  if (!length(ln)) return(NA_real_)
-  as.numeric(sub(".*Shapiro \\(normality\\):\\s*", "", ln[1]))
+  out <- tryCatch(seasonal::udg(m, "e2.shapiro"), error = function(e) NA_real_)
+  suppressWarnings(as.numeric(out))
 }
 
 # Robust transform label from a seas() object
@@ -953,8 +958,24 @@ seasonality_summary <- function(tbl, majority = 0.6) {
   if (!is.finite(fa) || !is.finite(fb) || fa != fb)
     return(list(ok = FALSE, reason = "freq_mismatch"))
   
-  z <- suppressWarnings(stats::ts.intersect(prev = a, new = b))
+  s <- max(stats::tsp(a)[1], stats::tsp(b)[1])
+  e <- min(stats::tsp(a)[2], stats::tsp(b)[2])
+  if (!is.finite(s) || !is.finite(e) || s > e) return(list(ok = FALSE, reason = "no_overlap"))
+  
+  aw <- tryCatch(stats::window(a, start = s, end = e), error = function(err) NULL)
+  bw <- tryCatch(stats::window(b, start = s, end = e), error = function(err) NULL)
+  if (is.null(aw) || is.null(bw)) return(list(ok = FALSE, reason = "no_overlap"))
+  
+  z <- tryCatch(
+    suppressWarnings(stats::ts.intersect(prev = aw, new = bw)),
+    error = function(err) NULL
+  )
   if (is.null(z) || nrow(z) == 0) return(list(ok = FALSE, reason = "no_overlap"))
+  
+  zz <- as.matrix(z)
+  keep <- stats::complete.cases(zz[, "prev"], zz[, "new"])
+  if (!any(keep)) return(list(ok = FALSE, reason = "no_overlap"))
+  z <- z[keep, , drop = FALSE]
   
   list(prev = z[, "prev"], new = z[, "new"], ok = TRUE, reason = "ok")
 }
@@ -981,104 +1002,4 @@ seasonality_summary <- function(tbl, majority = 0.6) {
 .w <- function(lst, nm, default = 0) {
   v <- tryCatch(as.numeric(if (!is.null(lst)) lst[[nm]] else NA_real_), error = function(e) NA_real_)
   if (length(v) != 1L || !is.finite(v)) default else v
-}
-
-#' Build user-supplied calendar regressors (Genhol-style)
-#'
-#' This helper lets users provide *generic* calendar regressors without relying
-#' on any country-specific datasets shipped with the package.
-#'
-#' Supports:
-#' - Precomputed regressors (`td_candidates`): named list of `ts`-boxable series
-#' - Moving-holiday regressors (`holidays`): built via [seasonal::genhol()]
-#'
-#' The output is directly consumable by [auto_seasonal_analysis()] via its
-#' `td_candidates` argument.
-#'
-#' @param y A `ts` (or ts-boxable) target series used for alignment.
-#' @param td_candidates Optional named list of precomputed regressors (ts-boxable).
-#' @param holidays Optional list defining moving-holiday regressors. Each element may be:
-#'   - a `Date` vector (holiday dates), or
-#'   - a list with fields `dates` (Date), `start` (int), `end` (int), `center` (chr), `name` (chr)
-#'   Windows are in days relative to the holiday date. Defaults: `start=-7`, `end=0`.
-#' @param frequency Optional frequency to use for holiday regressors (defaults to `frequency(y)`).
-#' @param td_usertype X-13 usertype label for *all* returned regressors (default `"holiday"`).
-#' @param default_center Default centering for holiday regressors (default `"calendar"`).
-#'
-#' @return A named list of `ts` regressors aligned to `y`. Attribute `td_usertype`
-#'   is attached for downstream use.
-#' @export
-build_user_xreg <- function(y,
-                            td_candidates = NULL,
-                            holidays = NULL,
-                            frequency = NULL,
-                            td_usertype = "holiday",
-                            default_center = c("calendar","mean","none")) {
-  y <- .as_ts(y)
-  default_center <- match.arg(default_center)
-  if (is.null(frequency)) frequency <- stats::frequency(y)
-  
-  out <- list()
-  
-  # 1) Precomputed regressors -------------------------------------------------
-  if (!is.null(td_candidates)) {
-    if (!is.list(td_candidates)) stop("`td_candidates` must be a list.")
-    out <- c(out, td_candidates)
-  }
-  
-  # 2) Moving-holiday regressors (Genhol-style) ------------------------------
-  if (!is.null(holidays)) {
-    if (!is.list(holidays)) holidays <- list(holidays)
-    
-    for (i in seq_along(holidays)) {
-      h <- holidays[[i]]
-      
-      # Allow bare Date vector
-      if (inherits(h, "Date")) h <- list(dates = h)
-      
-      if (!is.list(h)) {
-        warning(sprintf("Skipping holidays[[%d]]: not a Date vector or list.", i))
-        next
-      }
-      
-      dates <- h$dates %||% h$date %||% NULL
-      if (is.null(dates) || !inherits(dates, "Date")) {
-        warning(sprintf("Skipping holidays[[%d]]: missing `dates` (Date vector).", i))
-        next
-      }
-      
-      start  <- as.integer(h$start %||% -7L)
-      end    <- as.integer(h$end   %||%  0L)
-      center <- as.character(h$center %||% default_center)
-      name   <- as.character(h$name %||% paste0("hol", i))
-      
-      xr <- tryCatch(
-        seasonal::genhol(
-          x = dates,
-          start = start,
-          end = end,
-          frequency = as.integer(frequency),
-          center = center
-        ),
-        error = function(e) {
-          warning(sprintf("Skipping holiday '%s': genhol() failed (%s).", name, e$message))
-          NULL
-        }
-      )
-      if (is.null(xr)) next
-      
-      # Align to y (frequency and window). Drop if incompatible.
-      xr <- .align_xreg_to_y_fill0(xr, y, fill = 0)
-      if (is.null(xr)) {
-        warning(sprintf("Skipping holiday '%s': could not align to `y`.", name))
-        next
-      }
-      
-      out[[name]] <- xr
-    }
-  }
-  
-  # Final normalization (names, alignment checks)
-  out <- if (length(out)) .normalize_td_candidates(out, y = y, td_usertype = td_usertype) else NULL
-  out
 }
