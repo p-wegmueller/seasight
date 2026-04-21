@@ -399,7 +399,9 @@
 #' Build user-supplied calendar regressors (Genhol-style)
 #'
 #' Helper to create *generic* calendar regressors without relying on any
-#' country-specific datasets shipped with the package.
+#' country-specific datasets shipped with the package. This is deliberate:
+#' production holiday calendars should usually come from an authoritative
+#' institutional source, not from a generic package dataset.
 #'
 #' Supports:
 #' - Precomputed regressors (`td_candidates`): named list of ts-boxable series
@@ -415,6 +417,8 @@
 #'   - a list with fields `dates` (Date), `start` (int), `end` (int),
 #'     `center` (chr), `name` (chr)
 #'   Windows are in days relative to the holiday date. Defaults: `start=-7`, `end=0`.
+#'   Names on the `holidays` list are preserved when `name` is not supplied
+#'   inside an element.
 #' @param frequency Optional frequency to use for holiday regressors (defaults to `frequency(y)`).
 #' @param td_usertype X-13 usertype label for *all* returned regressors (default "holiday").
 #' @param default_center Default centering for holiday regressors.
@@ -443,6 +447,8 @@ build_user_xreg <- function(y,
   # 2) Moving-holiday regressors (Genhol-style) ------------------------------
   if (!is.null(holidays)) {
     if (!is.list(holidays)) holidays <- list(holidays)
+    holiday_names <- names(holidays)
+    if (is.null(holiday_names)) holiday_names <- rep("", length(holidays))
     
     for (i in seq_along(holidays)) {
       h <- holidays[[i]]
@@ -463,7 +469,8 @@ build_user_xreg <- function(y,
       start  <- as.integer(h$start %||% -7L)
       end    <- as.integer(h$end   %||%  0L)
       center <- as.character(h$center %||% default_center)
-      name   <- as.character(h$name %||% paste0("hol", i))
+      list_name <- holiday_names[[i]]
+      name   <- as.character(h$name %||% if (nzchar(list_name)) list_name else paste0("hol", i))
       
       xr <- tryCatch(
         seasonal::genhol(
@@ -773,6 +780,9 @@ sa_align_regressor <- function(y, x) {
     idx <- which(!nzchar(nm))
     nm[idx] <- paste0("td", idx)
     names(td_candidates) <- nm
+  }
+  if (anyDuplicated(nm)) {
+    stop("`td_candidates` names must be unique.")
   }
   
   td_candidates <- lapply(td_candidates, function(x) {

@@ -61,9 +61,17 @@ sa_issue_report_html <- function(
   .render_top_candidates_table <- function(df) {
     # Render compact HTML table for the "Top candidates" block.
     has <- function(nm) nm %in% names(df)
+    td_label <- if (has("td_label")) {
+      as.character(df$td_label)
+    } else if (has("td_name")) {
+      as.character(df$td_name)
+    } else {
+      rep(NA_character_, nrow(df))
+    }
+    td_label[is.na(td_label) | !nzchar(td_label)] <- "yes"
     tbl <- df %>%
       dplyr::mutate(
-        TD   = dplyr::case_when(has("with_td")  ~ ifelse(.data$with_td, "yes", "no"),
+        TD   = dplyr::case_when(has("with_td")  ~ ifelse(.data$with_td, td_label, "none"),
                                 TRUE            ~ NA_character_),
         QS_X11     = if (has("QS_p_x11"))   .flagP(.data$QS_p_x11,   threshold = 0.10) else NA_character_,
         QS_SEATS   = if (has("QS_p_seats")) .flagP(.data$QS_p_seats, threshold = 0.10) else NA_character_,
@@ -854,7 +862,7 @@ sa_top_candidates_table <- function(res, current_model = NULL, y = NULL, n = 5) 
   # ----------------------------------------------------------------------
   
   disp_cols <- c(
-    "model_label","arima","with_td","score_100","AICc","LB_p",
+    "model_label","arima","with_td","td_name","td_label","score_100","AICc","LB_p",
     "QSori_p","QS_p_x11","QS_p_seats","QS_p",
     "td_p","vola_reduction_pct","seasonal_amp_pct","dist_sa_L1","rev_mae"
   )
@@ -934,7 +942,16 @@ sa_top_candidates_table <- function(res, current_model = NULL, y = NULL, n = 5) 
   top$is_airline <- normalize(top$arima) == normalize(airline_arima)
   
   # ---- Render table ----
-  th <- c("Label","ARIMA","TD","Score (0-100)","AICc","LB p",
+  .td_label_row <- function(r) {
+    has_td <- isTRUE(r$with_td)
+    if (!has_td) return("none")
+    lab <- NA_character_
+    if ("td_label" %in% names(r)) lab <- as.character(r$td_label[[1]])
+    if ((is.na(lab) || !nzchar(lab)) && "td_name" %in% names(r)) lab <- as.character(r$td_name[[1]])
+    if (is.na(lab) || !nzchar(lab)) "yes" else lab
+  }
+
+  th <- c("Label","ARIMA","TD regressor","Score (0-100)","AICc","LB p",
           "QSori p","QS X-11 p","QS SEATS p","QS (min)","TD p",
           "Volatility \u2193 %","Seasonal amp %","L1 vs prev SA","Rev MAE")
   header <- htmltools::tags$tr(lapply(th, htmltools::tags$th))
@@ -950,7 +967,7 @@ sa_top_candidates_table <- function(res, current_model = NULL, y = NULL, n = 5) 
       class = row_class,
       htmltools::tags$td(html_escape(r$model_label)),
       htmltools::tags$td(htmltools::tags$span(style = "white-space:nowrap;", html_escape(r$arima))),
-      htmltools::tags$td(ifelse(isTRUE(r$with_td), "yes", "no")),
+      htmltools::tags$td(html_escape(.td_label_row(r))),
       htmltools::tags$td(.num(r$score_100, 1)),
       htmltools::tags$td(.num(r$AICc, 2)),
       htmltools::tags$td(.fmtP(r$LB_p)),

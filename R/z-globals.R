@@ -1,6 +1,7 @@
 utils::globalVariables(c(
   # existing columns
   "score", "model_label", "with_td", "AICc", "LB_p",
+  "td_name", "td_label",
   "QS_p", "QS_p_x11", "QS_p_seats",
   "QSori_p", "QSori_p_x11", "QSori_p_seats",
   "rev_mae", "dist_sa_L1", "dist_seas_RMS",

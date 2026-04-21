@@ -90,7 +90,7 @@ sa_report_html(
 
 ## Try Alternative Trading-Day Regressors
 
-`td_candidates` should be a named list of `ts` or ts-boxable regressors aligned to `y`. The example below is artificial but copy-pasteable.
+`td_candidates` should be a named list of `ts` or ts-boxable regressors aligned to `y`. `seasight` does not ship broad holiday calendars; production calendar data should come from an authoritative source for the country, sector and series being adjusted. The example below is artificial but copy-pasteable.
 
 ```r
 library(seasight)
@@ -123,7 +123,7 @@ diwali_dates <- as.Date(c(
 
 td_holiday <- build_user_xreg(
   y = y,
-  holidays = list(list(name = "diwali", dates = diwali_dates, start = -1, end = 1)),
+  holidays = list(diwali = list(dates = diwali_dates, start = -1, end = 1)),
   td_usertype = "holiday"
 )
 ```

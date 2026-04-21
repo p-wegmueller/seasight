@@ -359,7 +359,7 @@ diwali_dates <- as.Date(c(
 
 td <- build_user_xreg(
   y = y,
-  holidays = list(list(name = "diwali", dates = diwali_dates, start = -1, end = 1)),
+  holidays = list(diwali = list(dates = diwali_dates, start = -1, end = 1)),
   td_usertype = "holiday"
 )
 
@@ -535,6 +535,5 @@ Together, these tools make it easier to:
 > * `sa_report_html()` turns a technical analysis into a readable, archivable document.
 > * `sa_copyable_call()` ensures that every chosen model has a clean, reproducible code representation.
 > * This aligns directly with guideline demands for transparent, well-documented seasonal adjustment.
-
 
 

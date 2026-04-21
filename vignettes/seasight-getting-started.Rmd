@@ -164,7 +164,7 @@ diwali_dates <- as.Date(c(
 
 td <- build_user_xreg(
   y = x,
-  holidays = list(list(name = "diwali", dates = diwali_dates, start = -1, end = 1)),
+  holidays = list(diwali = list(dates = diwali_dates, start = -1, end = 1)),
   td_usertype = "holiday"
 )
 

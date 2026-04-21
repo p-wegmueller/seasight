@@ -24,6 +24,8 @@ build_user_xreg(
 \item a list with fields \code{dates} (Date), \code{start} (int), \code{end} (int),
 \code{center} (chr), \code{name} (chr)
 Windows are in days relative to the holiday date. Defaults: \code{start=-7}, \code{end=0}.
+Names on the \code{holidays} list are preserved when \code{name} is not supplied
+inside an element.
 }}
 
 \item{frequency}{Optional frequency to use for holiday regressors (defaults to \code{frequency(y)}).}
@@ -38,7 +40,9 @@ is attached for downstream use.
 }
 \description{
 Helper to create \emph{generic} calendar regressors without relying on any
-country-specific datasets shipped with the package.
+country-specific datasets shipped with the package. This is deliberate:
+production holiday calendars should usually come from an authoritative
+institutional source, not from a generic package dataset.
 }
 \details{
 Supports:

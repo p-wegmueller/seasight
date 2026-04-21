@@ -21,6 +21,14 @@ test_that(".normalize_td_candidates rejects invalid list inputs", {
     seasight:::.normalize_td_candidates(list(foo = NULL), y = y),
     "`td_candidates` entries must not be NULL."
   )
+
+  expect_error(
+    seasight:::.normalize_td_candidates(
+      stats::setNames(list(y, y), c("dup", "dup")),
+      y = y
+    ),
+    "`td_candidates` names must be unique."
+  )
 })
 
 test_that(".normalize_td_candidates fills only missing names and preserves td_usertype", {

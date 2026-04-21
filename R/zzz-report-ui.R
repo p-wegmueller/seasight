@@ -33,7 +33,7 @@ t_safe <- function(x) {
 
 .report_td_label <- function(row) {
   with_td <- isTRUE(suppressWarnings(as.logical(.report_get(row, "with_td", FALSE))))
-  if (!with_td) return("no")
+  if (!with_td) return("none")
   lab <- .report_chr(.report_get(row, "td_label", .report_get(row, "td_name", "")))
   if (nzchar(lab)) lab else "yes"
 }

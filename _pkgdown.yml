@@ -81,6 +81,7 @@ articles:
   - title: "Advanced usage"
     contents:
       - seasight-advanced
+      - seasight-calendar-holidays
 
   - title: "Seasonal adjustment in practice"
     contents:

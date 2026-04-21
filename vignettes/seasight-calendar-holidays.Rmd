@@ -1,0 +1,155 @@
+---
+title: "Calendar and holiday regressors"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Calendar and holiday regressors}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  echo = TRUE,
+  eval = FALSE
+)
+```
+
+Calendar effects are part of the model specification. In `seasight`, they are
+therefore treated as explicit candidate choices rather than hidden package data.
+This keeps the package focused on model search, diagnostics and reporting while
+leaving production calendars under the control of the user or institution.
+
+The practical rule is:
+
+- use X-13 or `seasonal` built-ins for standard effects where possible;
+- use `build_user_xreg()` for institution-supplied moving-holiday dates;
+- pass the resulting named regressors through `td_candidates`;
+- inspect `with_td`, `td_name` and the report's "TD regressor" column.
+
+`seasight` intentionally does not ship broad holiday datasets such as
+`holiday` or `chcal`. National holidays, bridge days, school calendars,
+religious holidays and trading calendars are source- and sector-specific. A
+generic bundled calendar can easily be wrong for a production series.
+
+## Built-in Easter handling
+
+For Easter, the simplest path is usually to let X-13 handle the effect through
+the model specification. `seasight` exposes this through `include_easter`.
+
+```{r easter-built-in}
+library(seasight)
+library(seasonal)
+
+y <- AirPassengers
+
+res_easter <- auto_seasonal_analysis(
+  y = y,
+  include_easter = "auto",
+  engine = "auto"
+)
+
+res_easter$table[1, c("model_label", "with_easter", "with_td", "td_name", "score_100")]
+```
+
+Use `include_easter = "always"` only when the effect is part of the production
+policy for that series. Use `include_easter = "off"` when Easter is known to be
+irrelevant or is handled elsewhere.
+
+## Precomputed trading-day regressors
+
+For working-day or trading-day effects, many institutions already maintain
+calendar regressors. Pass those directly as a named list. The names are carried
+through into the candidate table and HTML report.
+
+```{r precomputed-td}
+dates <- seq(as.Date("1949-01-01"), by = "month", length.out = length(y))
+
+days_in_month <- function(date) {
+  first <- as.Date(format(date, "%Y-%m-01"))
+  next_month <- seq(first, by = "month", length.out = 2)[2]
+  as.integer(next_month - first)
+}
+
+length_of_month <- vapply(dates, days_in_month, integer(1))
+td_len <- ts(length_of_month - mean(length_of_month), start = start(y), frequency = frequency(y))
+
+res_td <- auto_seasonal_analysis(
+  y = y,
+  td_candidates = list(length_of_month = td_len),
+  td_usertype = "td",
+  include_easter = "auto",
+  engine = "auto"
+)
+
+res_td$table[1, c("model_label", "with_td", "td_name", "td_p", "score_100")]
+```
+
+The example above is deliberately simple. In production, the regressor should
+come from the relevant business, statistical or national-accounts calendar.
+
+## Moving holidays with `build_user_xreg()`
+
+For holidays with known dates, such as Diwali, Lunar New Year, Ramadan-related
+effects or local events, use `build_user_xreg()`. Internally this uses
+`seasonal::genhol()` and then aligns the resulting regressor to the target
+series.
+
+```{r moving-holiday}
+diwali_dates <- as.Date(c(
+  "2018-11-07", "2019-10-27", "2020-11-14", "2021-11-04",
+  "2022-10-24", "2023-11-12", "2024-11-01"
+))
+
+cny_dates <- as.Date(c(
+  "2018-02-16", "2019-02-05", "2020-01-25", "2021-02-12",
+  "2022-02-01", "2023-01-22", "2024-02-10"
+))
+
+holiday_xreg <- build_user_xreg(
+  y = y,
+  holidays = list(
+    diwali = list(dates = diwali_dates, start = -7, end = 0),
+    lunar_new_year = list(dates = cny_dates, start = -3, end = 3)
+  ),
+  td_usertype = "holiday"
+)
+
+names(holiday_xreg)
+
+res_holiday <- auto_seasonal_analysis(
+  y = y,
+  td_candidates = holiday_xreg,
+  include_easter = "auto",
+  engine = "auto"
+)
+
+res_holiday$table[1, c("model_label", "with_td", "td_name", "with_easter", "td_p", "score_100")]
+```
+
+For SEATS candidates with user regressors, X-13 needs future regressor values
+over its forecast horizon. `seasight` pads pulse-type holiday regressors with
+zeros for this purpose. For non-pulse regressors, such as trading-day counts,
+provide future calendar values yourself where possible.
+
+## Inspecting the final decision
+
+The candidate table and the HTML report show which calendar option was selected.
+The final "Top candidates" table includes a "TD regressor" column with either the
+candidate name, such as `diwali`, or `none`.
+
+```{r report-with-holiday}
+sa_report_html(
+  y = y,
+  td_candidates = holiday_xreg,
+  include_easter = "auto",
+  title = "AirPassengers calendar-regressor example",
+  outfile = tempfile(fileext = ".html")
+)
+```
+
+This makes the calendar decision auditable: a reviewer can see whether no
+calendar regressor was used, whether Easter was included, and which user-supplied
+holiday candidate won.
+
