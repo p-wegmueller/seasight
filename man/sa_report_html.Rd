@@ -55,6 +55,9 @@ specifications to seasonal models before fitting.}
 
 \item{outfile}{Path to the HTML file to be written.}
 
+\item{file}{Optional alias for \code{outfile}, for compatibility with callers
+that use file-oriented naming.}
+
 \item{png_width, png_height}{Width and height (in pixels) of PNG plots
 embedded in the report.}
 

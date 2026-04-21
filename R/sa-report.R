@@ -706,6 +706,8 @@ document.addEventListener('click', function(e){
 #'   specifications to seasonal models before fitting.
 #' @param title Title of the report shown in the HTML page.
 #' @param outfile Path to the HTML file to be written.
+#' @param file Optional alias for `outfile`, for compatibility with callers
+#'   that use file-oriented naming.
 #' @param png_width,png_height Width and height (in pixels) of PNG plots
 #'   embedded in the report.
 #' @param print_to_console Logical. If `TRUE`, do not create an HTML file but
