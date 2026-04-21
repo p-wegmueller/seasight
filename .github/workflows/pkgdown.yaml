@@ -15,6 +15,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
     steps:
@@ -31,11 +32,28 @@ jobs:
           extra-packages: any::pkgdown
           needs: website
 
+      - name: Install package for article preflight
+        run: R CMD INSTALL --no-multiarch --with-keep.source .
+
+      - name: Build SA practice article preflight
+        timeout-minutes: 10
+        run: |
+          pkgdown::build_article(
+            name = "seasight-sa-practice",
+            new_process = TRUE,
+            lazy = FALSE,
+            quiet = FALSE
+          )
+        shell: Rscript {0}
+
       - name: Build pkgdown site
+        timeout-minutes: 20
         run: |
           pkgdown::build_site_github_pages(
             new_process = TRUE,
-            install = TRUE
+            install = TRUE,
+            lazy = FALSE,
+            quiet = FALSE
           )
         shell: Rscript {0}
 
