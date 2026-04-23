@@ -61,6 +61,7 @@ reference:
       - sa_is_do_not_adjust
       - sa_should_switch
       - sa_top_candidates_table
+      - plot.auto_seasonal_analysis
 
   - title: Utilities
     contents:
