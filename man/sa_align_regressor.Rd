@@ -19,3 +19,9 @@ Standardizes user-supplied regressors before they are passed to X-13. The
 helper checks frequency, windows the regressor to the span of \code{y}, and returns
 \code{NULL} if the result cannot be aligned exactly.
 }
+\examples{
+y <- AirPassengers
+x <- stats::lag(y, -1)
+aligned <- sa_align_regressor(y, x)
+stats::frequency(aligned)
+}

@@ -78,6 +78,18 @@
 #'   such as `best` (best `seas` model), `table` (diagnostic and ranking
 #'   table), `specs_tried`, `frequency`, `transform`, `baseline`, and
 #'   `seasonality`.
+#'
+#' @examples
+#' \donttest{
+#' if (requireNamespace("seasonal", quietly = TRUE)) {
+#'   res <- auto_seasonal_analysis(
+#'     AirPassengers,
+#'     max_specs = 3,
+#'     include_history_top_n = 2
+#'   )
+#'   res$seasonality$overall
+#' }
+#' }
 #' @export
 auto_seasonal_analysis <- function(y,
                                    specs = NULL,

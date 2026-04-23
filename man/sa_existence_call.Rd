@@ -26,3 +26,12 @@ A tibble with \code{call_overall} and shares per test family.
 Uses IDS, M7 (strong/weak), QS on SA, and QS on ORIGINAL (QSori) to form
 a simple majority-style decision. Thresholds mirror those used elsewhere.
 }
+\examples{
+tbl <- tibble::tibble(
+  QS_p = c(0.04, 0.20, 0.08),
+  M7 = c(0.82, 1.10, 0.95),
+  IDS = c("yes", "no", "yes"),
+  QSori_p = c(0.03, 0.15, 0.07)
+)
+sa_existence_call(tbl)
+}

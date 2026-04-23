@@ -16,3 +16,11 @@ An htmltools tag representing the card.
 Uses IDS, M7, QS on original, and presence/absence of a SEATS seasonal component
 to provide a short textual assessment of seasonality for the best model.
 }
+\examples{
+\donttest{
+if (requireNamespace("seasonal", quietly = TRUE)) {
+  res <- auto_seasonal_analysis(AirPassengers, max_specs = 3)
+  sa_existence_card(res)
+}
+}
+}

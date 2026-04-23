@@ -1,0 +1,12 @@
+citHeader("To cite seasight in publications use:")
+
+citEntry(
+  entry = "Manual",
+  title = "seasight: Tools for Seasonal Adjustment Diagnostics and Reporting",
+  author = personList(
+    person(given = "Philipp", family = "Wegmüller")
+  ),
+  year = "2026",
+  note = "R package version 0.1.0",
+  url = "https://github.com/p-wegmueller/seasight"
+)

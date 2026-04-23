@@ -15,3 +15,11 @@ An htmltools tag (card).
 \description{
 Explains, in plain language, why the selected engine was chosen for the best model.
 }
+\examples{
+\donttest{
+if (requireNamespace("seasonal", quietly = TRUE)) {
+  res <- auto_seasonal_analysis(AirPassengers, max_specs = 3)
+  sa_engine_choice_card(res)
+}
+}
+}

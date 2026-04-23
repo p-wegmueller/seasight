@@ -804,6 +804,19 @@ sa_report_html <- function(
 #' @param n Number of top rows to display (default 5). The airline/current rows
 #'   may be appended even if not in the top `n`.
 #' @return An `htmltools` tag (`<table>`) you can insert into reports.
+#'
+#' @examples
+#' \donttest{
+#' if (requireNamespace("seasonal", quietly = TRUE)) {
+#'   current_model <- seasonal::seas(AirPassengers)
+#'   res <- auto_seasonal_analysis(
+#'     y = AirPassengers,
+#'     current_model = current_model,
+#'     max_specs = 3
+#'   )
+#'   sa_top_candidates_table(res, current_model = current_model, y = AirPassengers, n = 5)
+#' }
+#' }
 #' @export
 sa_top_candidates_table <- function(res, current_model = NULL, y = NULL, n = 5) {
   .build_top_candidates_table(res, current_model = current_model, y = y, n = n)

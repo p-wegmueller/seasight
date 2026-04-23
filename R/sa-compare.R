@@ -7,6 +7,14 @@
 #'   - min_corr_seas: minimum correlation of seasonal components (vs. incumbent)
 #'   - min_lb_p: minimum acceptable Ljung-Box p-value on residuals
 #' @return One of "CHANGE_TO_NEW_MODEL" or "KEEP_CURRENT_MODEL".
+#'
+#' @examples
+#' \donttest{
+#' if (requireNamespace("seasonal", quietly = TRUE)) {
+#'   res <- auto_seasonal_analysis(AirPassengers, max_specs = 3)
+#'   sa_should_switch(res)
+#' }
+#' }
 #' @export
 sa_should_switch <- function(res,
                              thresholds = list(min_qs_p = 0.10,
@@ -56,6 +64,14 @@ sa_should_switch <- function(res,
 #'
 #' @param res Result of [auto_seasonal_analysis()].
 #' @return An htmltools tag representing the card.
+#'
+#' @examples
+#' \donttest{
+#' if (requireNamespace("seasonal", quietly = TRUE)) {
+#'   res <- auto_seasonal_analysis(AirPassengers, max_specs = 3)
+#'   sa_existence_card(res)
+#' }
+#' }
 #' @export
 sa_existence_card <- function(res) .build_existence_card(res)
 
@@ -224,6 +240,14 @@ sa_existence_card <- function(res) .build_existence_card(res)
 #' Explains, in plain language, why the selected engine was chosen for the best model.
 #' @param res Object from [auto_seasonal_analysis()].
 #' @return An htmltools tag (card).
+#'
+#' @examples
+#' \donttest{
+#' if (requireNamespace("seasonal", quietly = TRUE)) {
+#'   res <- auto_seasonal_analysis(AirPassengers, max_specs = 3)
+#'   sa_engine_choice_card(res)
+#' }
+#' }
 #' @export
 sa_engine_choice_card <- function(res) .build_engine_choice_card(res)
 

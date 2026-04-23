@@ -72,6 +72,18 @@
 #'
 #' @return A tibble with one row per series: `id`, `ok`, `status`, `reason`,
 #'   `message`, `outfile`, and `elapsed_seconds`.
+#'
+#' @examples
+#' fake_report <- function(y, outfile, ...) {
+#'   writeLines("<html><body>ok</body></html>", outfile)
+#'   list(report = outfile)
+#' }
+#' out <- sa_batch_run(
+#'   series = list(series1 = AirPassengers),
+#'   out_dir = tempdir(),
+#'   report_fun = fake_report
+#' )
+#' out$status
 #' @export
 sa_batch_run <- function(series,
                          out_dir = "sa_reports",
@@ -137,6 +149,18 @@ sa_batch_run <- function(series,
 #' @param ... Additional arguments passed to `report_fun`.
 #'
 #' @return Invisibly, the normalized output path.
+#'
+#' @examples
+#' fake_report <- function(y, outfile, ...) {
+#'   writeLines("<html><body>probe</body></html>", outfile)
+#'   list(report = outfile)
+#' }
+#' probe_case(
+#'   y = AirPassengers,
+#'   outfile = tempfile("probe-", fileext = ".html"),
+#'   verbose = FALSE,
+#'   report_fun = fake_report
+#' )
 #' @export
 probe_case <- function(y,
                        outfile = tempfile("seasight-probe-", fileext = ".html"),

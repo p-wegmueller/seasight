@@ -24,6 +24,14 @@
 #'
 #' @param m A fitted [seasonal::seas] model.
 #' @return A tibble with columns `type`, `period`, `coef`. Empty when none found.
+#'
+#' @examples
+#' \donttest{
+#' if (requireNamespace("seasonal", quietly = TRUE)) {
+#'   m <- seasonal::seas(AirPassengers)
+#'   extract_outliers(m)
+#' }
+#' }
 #' @export
 extract_outliers <- function(m) {
   stopifnot(inherits(m, "seas"))
@@ -58,6 +66,14 @@ extract_outliers <- function(m) {
 #'
 #' @param m A fitted [seasonal::seas] object.
 #' @return A one-row tibble with the diagnostics above.
+#'
+#' @examples
+#' \donttest{
+#' if (requireNamespace("seasonal", quietly = TRUE)) {
+#'   m <- seasonal::seas(AirPassengers)
+#'   sa_tests_model(m)
+#' }
+#' }
 #' @export
 sa_tests_model <- function(m) {
   stopifnot(inherits(m, "seas"))
@@ -130,6 +146,15 @@ sa_tests_model <- function(m) {
 #' @param thr List of thresholds: `qs` (0.10), `m7_strong` (0.90), `m7_weak` (1.05),
 #'   `borderline_min_share` (0.4), `use_qsori` (TRUE).
 #' @return A tibble with `call_overall` and shares per test family.
+#'
+#' @examples
+#' tbl <- tibble::tibble(
+#'   QS_p = c(0.04, 0.20, 0.08),
+#'   M7 = c(0.82, 1.10, 0.95),
+#'   IDS = c("yes", "no", "yes"),
+#'   QSori_p = c(0.03, 0.15, 0.07)
+#' )
+#' sa_existence_call(tbl)
 #' @export
 sa_existence_call <- function(tbl,
                               majority = 0.6,
@@ -202,6 +227,14 @@ sa_existence_call <- function(tbl,
 #' @param include_force Logical; if TRUE adds `force.type = "denton"`.
 #' @param engine     `"auto"` (use model's engine) or force `"seats"`/`"x11"`.
 #' @return A single string containing the `seas(...)` call.
+#'
+#' @examples
+#' \donttest{
+#' if (requireNamespace("seasonal", quietly = TRUE)) {
+#'   m <- seasonal::seas(AirPassengers)
+#'   sa_copyable_call(m, x_expr = "AirPassengers")
+#' }
+#' }
 #' @export
 sa_copyable_call <- function(m, x_expr, xreg_expr = NA,
                              include_force = FALSE,
@@ -259,6 +292,18 @@ sa_copyable_call <- function(m, x_expr, xreg_expr = NA,
 #' Delegates to the internal `.do_not_adjust()` to keep logic in one place.
 #' @param row One-row tibble from `res$table`.
 #' @return TRUE if the row satisfies the "do not adjust" rule, FALSE otherwise.
+#'
+#' @examples
+#' row <- tibble::tibble(
+#'   IDS = "no",
+#'   M7 = 1.10,
+#'   QSori_p_x11 = 0.12,
+#'   QSori_p_seats = 0.15,
+#'   SEATS_has_seasonal = FALSE,
+#'   seasonal_amp_pct = 0.8,
+#'   vola_reduction_pct = 2
+#' )
+#' sa_is_do_not_adjust(row)
 #' @export
 sa_is_do_not_adjust <- function(row) {
   .do_not_adjust(row)
@@ -274,6 +319,19 @@ sa_is_do_not_adjust <- function(row) {
 #' @param res Result from `auto_seasonal_analysis()`.
 #' @param current_model A fitted `seas` object to compare against.
 #' @return List with `decision`, `summary`, and aligned SA/seasonal series.
+#'
+#' @examples
+#' \donttest{
+#' if (requireNamespace("seasonal", quietly = TRUE)) {
+#'   current_model <- seasonal::seas(AirPassengers)
+#'   res <- auto_seasonal_analysis(
+#'     y = AirPassengers,
+#'     current_model = current_model,
+#'     max_specs = 3
+#'   )
+#'   sa_compare(res, current_model)
+#' }
+#' }
 #' @export
 sa_compare <- function(res, current_model) {
   stopifnot(inherits(res, "auto_seasonal_analysis"))

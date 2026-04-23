@@ -22,7 +22,9 @@ The main user-facing functions include:
 \seealso{
 Useful links:
 \itemize{
+  \item \url{https://github.com/p-wegmueller/seasight}
   \item \url{https://p-wegmueller.github.io/seasight/}
+  \item Report bugs at \url{https://github.com/p-wegmueller/seasight/issues}
 }
 
 }

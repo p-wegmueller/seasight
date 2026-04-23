@@ -42,3 +42,15 @@ A tibble with one row per series: \code{id}, \code{ok}, \code{status}, \code{rea
 Sequential batch runner with per-series status rows and a structured CSV log.
 Existing outputs can be skipped via \code{resume = TRUE}.
 }
+\examples{
+fake_report <- function(y, outfile, ...) {
+  writeLines("<html><body>ok</body></html>", outfile)
+  list(report = outfile)
+}
+out <- sa_batch_run(
+  series = list(series1 = AirPassengers),
+  out_dir = tempdir(),
+  report_fun = fake_report
+)
+out$status
+}

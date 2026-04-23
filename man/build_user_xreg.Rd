@@ -54,3 +54,12 @@ Supports:
 The output is directly consumable by \code{\link[=auto_seasonal_analysis]{auto_seasonal_analysis()}} via its
 \code{td_candidates} argument.
 }
+\examples{
+diwali_dates <- as.Date(c("2022-10-24", "2023-11-12", "2024-11-01"))
+xreg <- build_user_xreg(
+  y = AirPassengers,
+  holidays = list(diwali = list(dates = diwali_dates, start = -1, end = 1)),
+  td_usertype = "holiday"
+)
+names(xreg)
+}

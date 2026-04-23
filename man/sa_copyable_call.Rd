@@ -32,3 +32,11 @@ A single string containing the \code{seas(...)} call.
 \item X-11 -> include \code{x11 = ""}
 }
 }
+\examples{
+\donttest{
+if (requireNamespace("seasonal", quietly = TRUE)) {
+  m <- seasonal::seas(AirPassengers)
+  sa_copyable_call(m, x_expr = "AirPassengers")
+}
+}
+}

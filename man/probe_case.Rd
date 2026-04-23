@@ -30,3 +30,15 @@ Invisibly, the normalized output path.
 Convenience helper for reproducing a problematic single series. It writes an
 HTML report and returns the normalized output path invisibly.
 }
+\examples{
+fake_report <- function(y, outfile, ...) {
+  writeLines("<html><body>probe</body></html>", outfile)
+  list(report = outfile)
+}
+probe_case(
+  y = AirPassengers,
+  outfile = tempfile("probe-", fileext = ".html"),
+  verbose = FALSE,
+  report_fun = fake_report
+)
+}

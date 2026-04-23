@@ -62,3 +62,20 @@ test_that("sa_align_regressor aligns compatible regressors and rejects mismatche
   expect_equal(stats::end(out), stats::end(y))
   expect_null(sa_align_regressor(y, q))
 })
+
+test_that("time-series inputs reject list columns explicitly", {
+  y <- data.frame(
+    date = seq.Date(as.Date("2020-01-01"), by = "month", length.out = 24),
+    value = I(as.list(seq_len(24)))
+  )
+
+  expect_error(
+    sa_align_regressor(y, y),
+    "must not contain list columns"
+  )
+
+  expect_error(
+    seasight:::.as_ts(y),
+    "must not contain list columns"
+  )
+})

@@ -15,3 +15,15 @@ TRUE if the row satisfies the "do not adjust" rule, FALSE otherwise.
 \description{
 Delegates to the internal \code{.do_not_adjust()} to keep logic in one place.
 }
+\examples{
+row <- tibble::tibble(
+  IDS = "no",
+  M7 = 1.10,
+  QSori_p_x11 = 0.12,
+  QSori_p_seats = 0.15,
+  SEATS_has_seasonal = FALSE,
+  seasonal_amp_pct = 0.8,
+  vola_reduction_pct = 2
+)
+sa_is_do_not_adjust(row)
+}

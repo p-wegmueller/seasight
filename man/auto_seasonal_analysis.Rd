@@ -144,3 +144,15 @@ Runs a grid of X-13ARIMA-SEATS specifications, computes diagnostics
 model, etc.), and ranks candidates using a composite score. Returns
 the best model together with a diagnostic table and seasonality call.
 }
+\examples{
+\donttest{
+if (requireNamespace("seasonal", quietly = TRUE)) {
+  res <- auto_seasonal_analysis(
+    AirPassengers,
+    max_specs = 3,
+    include_history_top_n = 2
+  )
+  res$seasonality$overall
+}
+}
+}

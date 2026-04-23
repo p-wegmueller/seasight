@@ -27,3 +27,11 @@ One of "CHANGE_TO_NEW_MODEL" or "KEEP_CURRENT_MODEL".
 \description{
 Should we switch to the new best model?
 }
+\examples{
+\donttest{
+if (requireNamespace("seasonal", quietly = TRUE)) {
+  res <- auto_seasonal_analysis(AirPassengers, max_specs = 3)
+  sa_should_switch(res)
+}
+}
+}

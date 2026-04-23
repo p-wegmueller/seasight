@@ -2,7 +2,7 @@ name: pkgdown
 
 on:
   push:
-    branches: [ master ]
+    branches: [ main ]
   release:
     types: [ published ]
   workflow_dispatch:
@@ -11,6 +11,9 @@ permissions:
   contents: write
   pages: write
   id-token: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build:

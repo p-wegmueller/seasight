@@ -28,3 +28,16 @@ reference model ARIMA (0 1 1)(0 1 1) is also appended if absent.
 \details{
 Rows are lightly shaded: best (green), current (blue), airline (red).
 }
+\examples{
+\donttest{
+if (requireNamespace("seasonal", quietly = TRUE)) {
+  current_model <- seasonal::seas(AirPassengers)
+  res <- auto_seasonal_analysis(
+    y = AirPassengers,
+    current_model = current_model,
+    max_specs = 3
+  )
+  sa_top_candidates_table(res, current_model = current_model, y = AirPassengers, n = 5)
+}
+}
+}

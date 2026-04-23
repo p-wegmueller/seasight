@@ -15,3 +15,11 @@ A tibble with columns \code{type}, \code{period}, \code{coef}. Empty when none f
 \description{
 Extract X-13 outlier coefficients (AO/LS/TC) from a \code{seas} model
 }
+\examples{
+\donttest{
+if (requireNamespace("seasonal", quietly = TRUE)) {
+  m <- seasonal::seas(AirPassengers)
+  extract_outliers(m)
+}
+}
+}

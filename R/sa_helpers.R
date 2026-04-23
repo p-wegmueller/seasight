@@ -90,8 +90,24 @@
 .ts_or_null <- function(x) tryCatch(tsbox::ts_ts(x), error = function(e) NULL)
 .pc_or_null <- function(x) tryCatch(tsbox::ts_pc(x), error = function(e) NULL)
 
+.has_list_columns <- function(x) {
+  is.data.frame(x) && any(vapply(x, is.list, logical(1)))
+}
+
+.reject_list_columns <- function(x, arg = "y") {
+  if (.has_list_columns(x)) {
+    stop(
+      "`", arg, "` must not contain list columns; convert nested columns ",
+      "to atomic vectors before seasonal adjustment.",
+      call. = FALSE
+    )
+  }
+  invisible(x)
+}
+
 .as_ts <- function(y) {
   if (inherits(y, "ts")) return(y)
+  .reject_list_columns(y, "y")
   if (inherits(y, c("data.frame","tbl_df","tsibble","xts","zoo"))) return(tsbox::ts_ts(y))
   stop("`y` must be a ts or convertible object.")
 }
@@ -425,6 +441,15 @@
 #'
 #' @return A named list of `ts` regressors aligned to `y`. Attribute `td_usertype`
 #'   is attached for downstream use.
+#'
+#' @examples
+#' diwali_dates <- as.Date(c("2022-10-24", "2023-11-12", "2024-11-01"))
+#' xreg <- build_user_xreg(
+#'   y = AirPassengers,
+#'   holidays = list(diwali = list(dates = diwali_dates, start = -1, end = 1)),
+#'   td_usertype = "holiday"
+#' )
+#' names(xreg)
 #' @export
 build_user_xreg <- function(y,
                             td_candidates = NULL,
@@ -745,8 +770,17 @@ seasonality_summary <- function(tbl, majority = 0.6) {
 #' @param x Regressor series, coercible to `ts`.
 #'
 #' @return A `ts` object aligned to `y`, or `NULL` when alignment fails.
+#'
+#' @examples
+#' y <- AirPassengers
+#' x <- stats::lag(y, -1)
+#' aligned <- sa_align_regressor(y, x)
+#' stats::frequency(aligned)
 #' @export
 sa_align_regressor <- function(y, x) {
+  .reject_list_columns(y, "y")
+  .reject_list_columns(x, "x")
+
   y <- tryCatch(tsbox::ts_ts(y), error = function(e) NULL)
   x <- tryCatch(tsbox::ts_ts(x), error = function(e) NULL)
 

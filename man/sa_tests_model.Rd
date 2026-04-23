@@ -28,3 +28,11 @@ Columns:
 For backwards compatibility, the output also includes the legacy aliases
 \code{QS_SA_x11}, \code{QS_SA_seats}, \code{QS_SA}, \code{QSori_x11}, \code{QSori_seats}, \code{QSori}.
 }
+\examples{
+\donttest{
+if (requireNamespace("seasonal", quietly = TRUE)) {
+  m <- seasonal::seas(AirPassengers)
+  sa_tests_model(m)
+}
+}
+}

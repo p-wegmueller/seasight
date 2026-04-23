@@ -18,3 +18,16 @@ List with \code{decision}, \code{summary}, and aligned SA/seasonal series.
 Thin wrapper around \code{compare_to_current()} returning its result.
 If \code{compare_to_current()} is not found, an informative error is raised.
 }
+\examples{
+\donttest{
+if (requireNamespace("seasonal", quietly = TRUE)) {
+  current_model <- seasonal::seas(AirPassengers)
+  res <- auto_seasonal_analysis(
+    y = AirPassengers,
+    current_model = current_model,
+    max_specs = 3
+  )
+  sa_compare(res, current_model)
+}
+}
+}

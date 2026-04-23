@@ -35,6 +35,16 @@ National Accounts or short-term indicators.
 The design follows the recommendations in Eurostat’s *ESS Guidelines on Seasonal
 Adjustment* and the *Handbook on Seasonal Adjustment*.([European Commission][1])
 
+
+## How this package differs from alternatives
+
+`seasight` is designed to complement the core [`seasonal`](https://cran.r-project.org/package=seasonal) API.
+
+- Keep using `seasonal::seas()` when you need direct hand-crafted X-13 calls.
+- Use `seasight` when you need a standardized and auditable workflow around those calls (candidate grids, diagnostics, ranking, and reporting artifacts).
+
+In other words, `seasight` focuses on **decision support and reproducibility** in institutional workflows, while the decomposition engine remains X-13 via `seasonal`.
+
 ## Setup
 
 ```{r setup}
@@ -76,7 +86,7 @@ tests_current <- sa_tests_model(m_current)
 tests_current
 ```
 
-The exact fields may evolve, but typically include:
+For the 0.1.x pre-submission cycle, the core user-facing outputs are frozen; typical fields include:
 
 * **Residual seasonality (QS on SA)**
   X-11/SEATS QS statistics on the *seasonally adjusted* series.
