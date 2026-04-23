@@ -13,7 +13,7 @@ Description: Provides tools for automated diagnostics, model selection and
     R Markdown reports for official statistics and other production workflows.
 License: MIT + file LICENSE
 Encoding: UTF-8
-Roxygen: list(markdown = TRUE)
+Roxygen: list(markdown = TRUE, roclets = c("namespace", "rd", "srr::srr_stats_roclet"))
 RoxygenNote: 7.3.3
 Imports:
     seasonal,
@@ -28,10 +28,10 @@ Suggests:
     callr,
     testthat (>= 3.0.0),
     knitr,
-    rmarkdown
+    rmarkdown,
+    units
 VignetteBuilder: knitr
 Config/testthat/edition: 3
 URL: https://github.com/p-wegmueller/seasight,
     https://p-wegmueller.github.io/seasight/
 BugReports: https://github.com/p-wegmueller/seasight/issues
-

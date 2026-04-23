@@ -2,6 +2,7 @@
 
 Last updated: 2026-04-23
 Badge target: **Bronze** (first milestone)
+Submission template `statsgrade`: `bronze`
 
 This document maps current `seasight` capabilities to statistical software
 review expectations and tracks remaining work for submission.
@@ -49,12 +50,15 @@ path toward broader standards coverage in later releases.
   applicable to the current API.
 - Time-series conversion now explicitly rejects data-frame list columns before
   calling `tsbox`, with a clear error message.
+- Formal `@srrstats` / `@srrstatsNA` tags for the general and time-series
+  standards are now tracked in `R/srr-stats-standards.R`.
+- Repeated synthetic test series are centralised in
+  `tests/testthat/helper-fixtures.R`, reducing hard-coded stochastic test data
+  and improving the G5.0/G5.1 evidence trail.
 
 ### Toward silver/gold (future)
 
-- [ ] Add formal `srr` standards tags for applicable general and time-series
-  standards.
 - [ ] Add richer comparative validation materials and benchmarking artifacts.
 - [ ] Expand examples across additional official-statistics production contexts.
-- [ ] Consider extracting shared test-data constructors for larger test
-  fixtures if the test suite grows beyond compact inline examples.
+- [ ] Revisit `TS1.7`/`TS4.1` if future APIs intentionally support
+  unit-bearing time-series inputs and unit-preserving outputs.

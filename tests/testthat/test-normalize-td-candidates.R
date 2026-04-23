@@ -1,7 +1,7 @@
 test_that(".normalize_td_candidates keeps NULL as no-candidates sentinel", {
   skip_if_not(exists(".normalize_td_candidates", envir = asNamespace("seasight"), inherits = FALSE))
   
-  y <- ts(1:24, start = c(2020, 1), frequency = 12)
+  y <- fixture_monthly_ts()
   out <- seasight:::.normalize_td_candidates(NULL, y = y)
   
   expect_null(out)
@@ -10,7 +10,7 @@ test_that(".normalize_td_candidates keeps NULL as no-candidates sentinel", {
 test_that(".normalize_td_candidates rejects invalid list inputs", {
   skip_if_not(exists(".normalize_td_candidates", envir = asNamespace("seasight"), inherits = FALSE))
   
-  y <- ts(1:24, start = c(2020, 1), frequency = 12)
+  y <- fixture_monthly_ts()
   
   expect_error(
     seasight:::.normalize_td_candidates(list(), y = y),
@@ -34,9 +34,9 @@ test_that(".normalize_td_candidates rejects invalid list inputs", {
 test_that(".normalize_td_candidates fills only missing names and preserves td_usertype", {
   skip_if_not(exists(".normalize_td_candidates", envir = asNamespace("seasight"), inherits = FALSE))
   
-  y <- ts(1:24, start = c(2020, 1), frequency = 12)
-  td1 <- ts(runif(24), start = start(y), frequency = frequency(y))
-  td2 <- ts(runif(24), start = start(y), frequency = frequency(y))
+  y <- fixture_monthly_ts()
+  td1 <- fixture_monthly_regressor(y, offset = 100)
+  td2 <- fixture_monthly_regressor(y, offset = 200)
   
   out <- seasight:::.normalize_td_candidates(
     list(td_named = td1, td2),
@@ -50,9 +50,9 @@ test_that(".normalize_td_candidates fills only missing names and preserves td_us
 })
 
 test_that("sa_align_regressor aligns compatible regressors and rejects mismatches", {
-  y <- ts(1:24, start = c(2020, 1), frequency = 12)
-  x <- ts(101:148, start = c(2019, 1), frequency = 12)
-  q <- ts(1:8, start = c(2020, 1), frequency = 4)
+  y <- fixture_monthly_ts()
+  x <- fixture_monthly_ts(n = 48L, start = c(2019, 1), values = 101:148)
+  q <- fixture_quarterly_ts(n = 8L, start = c(2020, 1), values = 1:8)
 
   out <- sa_align_regressor(y, x)
 
@@ -78,4 +78,22 @@ test_that("time-series inputs reject list columns explicitly", {
     seasight:::.as_ts(y),
     "must not contain list columns"
   )
+})
+
+test_that("unit-bearing tabular regressors are accepted and retain unit metadata", {
+  skip_if_not_installed("units")
+
+  y <- data.frame(
+    date = seq.Date(as.Date("2020-01-01"), by = "month", length.out = 24),
+    value = seq_len(24)
+  )
+  x <- data.frame(
+    date = y$date,
+    value = units::set_units(seq_len(24), "m")
+  )
+
+  out <- sa_align_regressor(y, x)
+
+  expect_s3_class(out, "ts")
+  expect_equal(attr(out, "units"), "m")
 })

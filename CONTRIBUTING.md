@@ -52,3 +52,11 @@ For peer-review readiness changes, consult:
 - `README.md` for package positioning,
 - `NEWS.md` for release notes,
 - `inst/ropensci/bronze-standards-mapping.md` for statistical standards mapping.
+
+The package does not interact with third-party web services during normal use,
+testing or examples, so there are no service-specific Terms of Service to
+consider for contributors.
+
+The maintainer intends to keep the package under active maintenance through the
+rOpenSci review process and for at least the expected post-acceptance maintenance
+period.

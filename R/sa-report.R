@@ -1,3 +1,14 @@
+#' srr_stats_reporting
+#'
+#' @srrstats {G4.0, TS4.0, TS4.0b, TS4.2, TS4.3, TS4.4}
+#'   Report-writing functions document output paths, create report files, and
+#'   return documented report/model objects with temporal model information.
+#' @srrstats {TS5.1, TS5.2, TS5.3}
+#'   HTML reports include temporal plots generated from `seasonal` model
+#'   objects, with time on the horizontal axis.
+#' @noRd
+NULL
+
 # =============================================================================
 # sa-report.R Build the Seasonal Adjustment HTML report
 # =============================================================================
@@ -735,8 +746,16 @@ document.addEventListener('click', function(e){
 #'
 #' @return Invisibly, a list with elements `report` (path to the HTML file) and
 #'   `res` (the corresponding [auto_seasonal_analysis()] result).
-#' @examplesIf requireNamespace("seasonal", quietly = TRUE)
-#' # sa_report_html(y = AirPassengers, outfile = tempfile(fileext = ".html"))
+#' @examples
+#' \donttest{
+#' if (requireNamespace("seasonal", quietly = TRUE)) {
+#'   sa_report_html(
+#'     y = AirPassengers,
+#'     outfile = tempfile(fileext = ".html"),
+#'     max_specs = 3
+#'   )
+#' }
+#' }
 #' @seealso [auto_seasonal_analysis()], [sa_existence_card()], [sa_top_candidates_table()]
 #' @export
 sa_report_html <- function(

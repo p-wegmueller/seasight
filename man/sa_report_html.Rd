@@ -112,9 +112,15 @@ the current model (flagged as current) when one is supplied.
 }
 }
 \examples{
-\dontshow{if (requireNamespace("seasonal", quietly = TRUE)) withAutoprint(\{ # examplesIf}
-# sa_report_html(y = AirPassengers, outfile = tempfile(fileext = ".html"))
-\dontshow{\}) # examplesIf}
+\donttest{
+if (requireNamespace("seasonal", quietly = TRUE)) {
+  sa_report_html(
+    y = AirPassengers,
+    outfile = tempfile(fileext = ".html"),
+    max_specs = 3
+  )
+}
+}
 }
 \seealso{
 \code{\link[=auto_seasonal_analysis]{auto_seasonal_analysis()}}, \code{\link[=sa_existence_card]{sa_existence_card()}}, \code{\link[=sa_top_candidates_table]{sa_top_candidates_table()}}

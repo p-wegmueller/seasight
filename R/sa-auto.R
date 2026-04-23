@@ -1,3 +1,19 @@
+#' srr_stats_auto_workflow
+#'
+#' @srrstats {G1.0, G1.1, G1.2, G1.3}
+#'   The automatic workflow is documented as orchestration around established
+#'   X-13ARIMA-SEATS methods, with lifecycle, terminology, and scope described
+#'   in README/vignettes.
+#' @srrstats {G5.4, G5.4a, G5.4b, G5.4c, G5.8, G5.8a, G5.8b, G5.8c, G5.8d}
+#'   Tests exercise known base time-series examples and edge cases around empty
+#'   candidate grids, incompatible structures, no-seasonality outcomes, and
+#'   absent components.
+#' @srrstats {TS4.0, TS4.0b, TS4.2, TS4.3, TS4.4, TS4.5, TS4.5b, TS4.5c}
+#'   Result objects have documented structures and retain temporal/model
+#'   information needed to reproduce transformations and adjustment decisions.
+#' @noRd
+NULL
+
 #' Automatic seasonal analysis (candidate grid + ranking)
 #'
 #' Runs a grid of X-13ARIMA-SEATS specifications, computes diagnostics

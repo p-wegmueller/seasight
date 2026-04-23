@@ -1,5 +1,5 @@
 test_that("sa_batch_run executes and logs basic status rows", {
-  out_dir <- file.path(tempdir(), paste0("seasight-batch-", Sys.getpid(), "-", as.integer(stats::runif(1, 1, 1e6))))
+  out_dir <- fixture_tempdir("seasight-batch")
 
   fake_report <- function(y, outfile, ...) {
     writeLines(as.character(length(y)), outfile)
@@ -27,7 +27,7 @@ test_that("sa_batch_run executes and logs basic status rows", {
 })
 
 test_that("sa_batch_run supports resume skip behavior", {
-  out_dir <- file.path(tempdir(), paste0("seasight-batch-resume-", Sys.getpid(), "-", as.integer(stats::runif(1, 1, 1e6))))
+  out_dir <- fixture_tempdir("seasight-batch-resume")
 
   fake_report <- function(y, outfile, ...) {
     writeLines("ok", outfile)
@@ -61,7 +61,7 @@ test_that("path and message sanitizers are stable", {
 
 test_that("sa_batch_run records per-series timeouts", {
   skip_if_not_installed("callr")
-  out_dir <- file.path(tempdir(), paste0("seasight-batch-timeout-", Sys.getpid(), "-", as.integer(stats::runif(1, 1, 1e6))))
+  out_dir <- fixture_tempdir("seasight-batch-timeout")
 
   slow_report <- function(y, outfile, ...) {
     Sys.sleep(5)

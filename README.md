@@ -50,6 +50,9 @@ The package intentionally focuses on diagnostics/reporting orchestration and kee
 
 `seasight` targets the **bronze** statistical-software badge first, then incremental progression.
 A first standards mapping is tracked in `inst/ropensci/bronze-standards-mapping.md`.
+For submission-template consistency, the intended `statsgrade` value is
+`bronze`. The package is intended for CRAN after review and is not intended for
+Bioconductor.
 
 ## Installation
 
@@ -203,6 +206,9 @@ Development setup, testing expectations and review-readiness notes are described
 in [`CONTRIBUTING.md`](CONTRIBUTING.md). Normal local tests do not require
 tokens or external services; a GitHub token is only useful for checks that query
 GitHub metadata, such as `pkgcheck`.
+
+All participants are expected to follow the project
+[Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## License
 

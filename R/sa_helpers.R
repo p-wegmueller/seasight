@@ -1,3 +1,26 @@
+#' srr_stats_preprocessing
+#'
+#' @srrstats {G2.0, G2.0a, G2.1, G2.1a, G2.2, G2.3, G2.3a, G2.3b}
+#'   Input validation constrains scalar options, expected types, candidate-list
+#'   structure, and univariate target-series handling before X-13 fitting.
+#' @srrstats {G2.4, G2.4a, G2.4b, G2.4c, G2.6, G2.7, G2.8}
+#'   Preprocessing converts supported tabular and time-series inputs to a
+#'   uniform base `ts` representation via `tsbox`.
+#' @srrstats {G2.9, G2.10, G2.11, G2.12}
+#'   Unsupported nested/list-column inputs are rejected explicitly and tabular
+#'   conversion is centralised rather than relying on ambiguous extraction.
+#' @srrstats {G2.13, G2.15, G2.16, G3.0}
+#'   Diagnostics use explicit finite/missing checks and tolerance-oriented
+#'   numeric handling.
+#' @srrstats {TS1.0, TS1.1, TS1.2, TS1.3, TS1.4, TS1.5, TS1.6, TS1.7, TS1.8}
+#'   Time-series inputs are documented, converted, aligned, unit-aware for
+#'   tabular regressors, and represented with explicit frequency/time metadata.
+#' @srrstats {TS2.0, TS2.2, TS2.3, TS2.4, TS2.4a, TS2.4b}
+#'   Regularity, transform, and stationarity assumptions are handled through the
+#'   X-13/`seasonal` workflow and exposed through diagnostics.
+#' @noRd
+NULL
+
 # --- Utilities -----------------------------------------------------------------
 
 .m7_stat <- function(m) {
@@ -105,10 +128,42 @@
   invisible(x)
 }
 
+.units_label <- function(x) {
+  if (!requireNamespace("units", quietly = TRUE)) return(NULL)
+  if (inherits(x, "units")) return(units::deparse_unit(x))
+  if (!is.data.frame(x)) return(NULL)
+  unit_cols <- vapply(x, inherits, logical(1), what = "units")
+  if (!any(unit_cols)) return(NULL)
+  vals <- vapply(x[unit_cols], units::deparse_unit, character(1))
+  paste(unique(vals), collapse = ", ")
+}
+
+.drop_units_columns <- function(x) {
+  if (!requireNamespace("units", quietly = TRUE)) return(x)
+  if (inherits(x, "units")) return(units::drop_units(x))
+  if (!is.data.frame(x)) return(x)
+  unit_cols <- vapply(x, inherits, logical(1), what = "units")
+  for (nm in names(x)[unit_cols]) {
+    x[[nm]] <- units::drop_units(x[[nm]])
+  }
+  x
+}
+
+.attach_units_label <- function(x, unit_label) {
+  if (!is.null(unit_label) && nzchar(unit_label)) {
+    attr(x, "units") <- unit_label
+  }
+  x
+}
+
 .as_ts <- function(y) {
   if (inherits(y, "ts")) return(y)
   .reject_list_columns(y, "y")
-  if (inherits(y, c("data.frame","tbl_df","tsibble","xts","zoo"))) return(tsbox::ts_ts(y))
+  unit_label <- .units_label(y)
+  y <- .drop_units_columns(y)
+  if (inherits(y, c("data.frame","tbl_df","tsibble","xts","zoo"))) {
+    return(.attach_units_label(tsbox::ts_ts(y), unit_label))
+  }
   stop("`y` must be a ts or convertible object.")
 }
 
@@ -781,8 +836,9 @@ sa_align_regressor <- function(y, x) {
   .reject_list_columns(y, "y")
   .reject_list_columns(x, "x")
 
-  y <- tryCatch(tsbox::ts_ts(y), error = function(e) NULL)
-  x <- tryCatch(tsbox::ts_ts(x), error = function(e) NULL)
+  unit_label <- .units_label(x)
+  y <- tryCatch(tsbox::ts_ts(.drop_units_columns(y)), error = function(e) NULL)
+  x <- tryCatch(tsbox::ts_ts(.drop_units_columns(x)), error = function(e) NULL)
 
   if (is.null(y) || is.null(x) || !inherits(y, "ts") || !inherits(x, "ts")) {
     return(NULL)
@@ -799,7 +855,10 @@ sa_align_regressor <- function(y, x) {
     error = function(e) NULL
   )
   if (is.null(out) || NROW(out) != length(y)) return(NULL)
-  stats::ts(as.matrix(out), start = stats::start(y), frequency = y_freq)
+  .attach_units_label(
+    stats::ts(as.matrix(out), start = stats::start(y), frequency = y_freq),
+    unit_label
+  )
 }
 
 # Ensure td_candidates is a named list of ts with same freq/length as y

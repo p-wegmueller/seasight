@@ -1,8 +1,8 @@
 test_that(".fit_spec pads xreg for SEATS (and sets forecast lead/back)", {
   skip_if_not(exists(".fit_spec", envir = asNamespace("seasight"), inherits = FALSE))
   
-  y  <- ts(1:40, start = c(2015, 1), frequency = 4)
-  xr <- ts(rnorm(40), start = start(y), frequency = frequency(y))
+  y  <- fixture_quarterly_ts()
+  xr <- stats::ts(seq_len(40), start = start(y), frequency = frequency(y))
   
   captured <- NULL
   
@@ -46,8 +46,8 @@ test_that(".fit_spec pads xreg for SEATS (and sets forecast lead/back)", {
 test_that(".fit_spec does NOT pad xreg for X11", {
   skip_if_not(exists(".fit_spec", envir = asNamespace("seasight"), inherits = FALSE))
   
-  y  <- ts(1:40, start = c(2015, 1), frequency = 4)
-  xr <- ts(rnorm(40), start = start(y), frequency = frequency(y))
+  y  <- fixture_quarterly_ts()
+  xr <- stats::ts(seq_len(40), start = start(y), frequency = frequency(y))
   
   captured <- NULL
   testthat::local_mocked_bindings(
@@ -81,7 +81,7 @@ test_that(".fit_spec does NOT pad xreg for X11", {
 test_that(".fit_spec does NOT pad when td_xreg is NULL", {
   skip_if_not(exists(".fit_spec", envir = asNamespace("seasight"), inherits = FALSE))
   
-  y <- ts(1:40, start = c(2015, 1), frequency = 4)
+  y <- fixture_quarterly_ts()
   
   captured <- NULL
   testthat::local_mocked_bindings(
@@ -112,9 +112,9 @@ test_that(".fit_spec does NOT pad when td_xreg is NULL", {
 test_that(".fit_spec padding preserves multi-column xreg", {
   skip_if_not(exists(".fit_spec", envir = asNamespace("seasight"), inherits = FALSE))
   
-  y <- ts(1:40, start = c(2015, 1), frequency = 4)
+  y <- fixture_quarterly_ts()
   
-  xr2 <- ts(cbind(a = rnorm(40), b = rnorm(40)),
+  xr2 <- ts(cbind(a = seq_len(40), b = seq_len(40) + 100),
             start = start(y), frequency = frequency(y))
   
   captured <- NULL
