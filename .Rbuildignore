@@ -1,3 +1,7 @@
+^\.codex$
+^AGENTS\.md$
+^CODE_OF_CONDUCT\.md$
+^CONTRIBUTING\.md$
 ^LICENSE\.md$
 ^_pkgdown\.yml$
 ^docs$

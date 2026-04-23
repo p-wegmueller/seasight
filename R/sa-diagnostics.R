@@ -329,7 +329,9 @@ sa_is_do_not_adjust <- function(row) {
 #'     current_model = current_model,
 #'     max_specs = 3
 #'   )
-#'   sa_compare(res, current_model)
+#'   if (exists("compare_to_current", mode = "function")) {
+#'     sa_compare(res, current_model)
+#'   }
 #' }
 #' }
 #' @export
