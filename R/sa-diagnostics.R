@@ -207,15 +207,6 @@ sa_existence_call <- function(tbl,
 
 # --- Copy-pasteable seas() call ------------------------------------------------
 
-# local AICc (not exported here, but kept in sync with other files)
-.aicc <- function(m) {
-  aic <- suppressWarnings(tryCatch(stats::AIC(m), error = function(e) NA_real_))
-  k   <- suppressWarnings(tryCatch(length(stats::coef(m)), error = function(e) NA_integer_))
-  n   <- suppressWarnings(tryCatch(length(stats::na.omit(seasonal::original(m))), error = function(e) NA_integer_))
-  if (!is.finite(aic) || !is.finite(k) || !is.finite(n) || n <= (k + 1)) return(aic)
-  aic + (2 * k * (k + 1)) / (n - k - 1)
-}
-
 #' Build a copy-pasteable seas() call from a fitted model
 #'
 #' * SEATS (default engine) -> omit `x11`/`seats` args
@@ -311,14 +302,18 @@ sa_is_do_not_adjust <- function(row) {
 
 # --- Compare incumbent vs best (thin wrapper) ---------------------------------
 
-#' Comparison wrapper (current vs best)
+#' Compare an incumbent model with the selected best model
 #'
-#' Thin wrapper around `compare_to_current()` returning its result.
-#' If `compare_to_current()` is not found, an informative error is raised.
+#' Summarises the incumbent `current_model` against the best model stored in an
+#' [auto_seasonal_analysis()] result. The comparison is intentionally compact:
+#' it reports key diagnostics, the switching decision from [sa_should_switch()],
+#' and aligned seasonally adjusted and seasonal-component series when they are
+#' available.
 #'
 #' @param res Result from `auto_seasonal_analysis()`.
 #' @param current_model A fitted `seas` object to compare against.
-#' @return List with `decision`, `summary`, and aligned SA/seasonal series.
+#' @return A list of class `"seasight_sa_compare"` with elements:
+#'   `decision`, `summary`, `series`, `diagnostics`, and `table`.
 #'
 #' @examples
 #' \donttest{
@@ -329,20 +324,119 @@ sa_is_do_not_adjust <- function(row) {
 #'     current_model = current_model,
 #'     max_specs = 3
 #'   )
-#'   if (exists("compare_to_current", mode = "function")) {
-#'     sa_compare(res, current_model)
-#'   }
+#'   sa_compare(res, current_model)
 #' }
 #' }
 #' @export
 sa_compare <- function(res, current_model) {
-  stopifnot(inherits(res, "auto_seasonal_analysis"))
-  cmp <- get0("compare_to_current", mode = "function", inherits = TRUE)
-  if (is.null(cmp)) {
-    stop("compare_to_current() not found in the search path. ",
-         "Please provide/attach its implementation or remove this call.")
+  if (!inherits(res, "auto_seasonal_analysis")) {
+    stop("`res` must be an object returned by `auto_seasonal_analysis()`.", call. = FALSE)
   }
-  cmp(res, current_model)
+  if (!inherits(current_model, "seas")) {
+    stop("`current_model` must be a fitted `seasonal::seas` object.", call. = FALSE)
+  }
+  if (is.null(res$best) || !inherits(res$best, "seas")) {
+    stop("`res` does not contain a fitted best model to compare.", call. = FALSE)
+  }
+  if (!is.data.frame(res$table) || !nrow(res$table)) {
+    stop("`res$table` must contain at least one candidate row.", call. = FALSE)
+  }
+
+  best <- res$best
+  best_row <- dplyr::slice(res$table, 1)
+
+  series_or_null <- function(expr) {
+    tryCatch(expr, error = function(e) NULL)
+  }
+  seasonal_or_null <- function(m) {
+    out <- series_or_null(seasonal::series(m, "seats.seasonal"))
+    if (is.null(out)) out <- series_or_null(seasonal::series(m, "x11.seasonal"))
+    out
+  }
+  first_or_na <- function(row, nm) {
+    if (!nm %in% names(row)) return(NA_real_)
+    suppressWarnings(as.numeric(row[[nm]][1]))
+  }
+
+  current_sa <- series_or_null(seasonal::final(current_model))
+  best_sa <- series_or_null(seasonal::final(best))
+  current_seasonal <- seasonal_or_null(current_model)
+  best_seasonal <- seasonal_or_null(best)
+
+  aligned_sa <- .align2(current_sa, best_sa)
+  aligned_seasonal <- .align2(current_seasonal, best_seasonal)
+
+  current_diag <- tibble::tibble(
+    model = "current",
+    arima = .arima_string(current_model),
+    engine = .engine_used(current_model),
+    AICc = .aicc(current_model),
+    QS_p = .qs_overall_on_SA(current_model),
+    LB_p = .lb_p(current_model),
+    transform = .transform_label(current_model)
+  )
+  best_diag <- tibble::tibble(
+    model = "best",
+    arima = .coalesce_arima_str(best_row),
+    engine = as.character(best_row$engine %||% .engine_used(best)),
+    AICc = first_or_na(best_row, "AICc"),
+    QS_p = first_or_na(best_row, "QS_p"),
+    LB_p = first_or_na(best_row, "LB_p"),
+    transform = .transform_label(best, fallback = res$transform %||% NA_character_)
+  )
+  diag_tbl <- dplyr::bind_rows(current_diag, best_diag)
+
+  sa_l1 <- if (isTRUE(aligned_sa$ok)) {
+    mean(abs(as.numeric(aligned_sa$prev) - as.numeric(aligned_sa$new)), na.rm = TRUE)
+  } else {
+    NA_real_
+  }
+  seasonal_rms <- if (isTRUE(aligned_seasonal$ok)) {
+    sqrt(mean((as.numeric(aligned_seasonal$prev) - as.numeric(aligned_seasonal$new))^2, na.rm = TRUE))
+  } else {
+    NA_real_
+  }
+  seasonal_corr <- if (isTRUE(aligned_seasonal$ok)) {
+    suppressWarnings(stats::cor(
+      as.numeric(aligned_seasonal$prev),
+      as.numeric(aligned_seasonal$new),
+      use = "complete.obs"
+    ))
+  } else {
+    NA_real_
+  }
+
+  summary <- tibble::tibble(
+    metric = c("AICc", "QS_p", "LB_p", "SA_L1_distance", "seasonal_RMS_distance", "seasonal_correlation"),
+    current = c(current_diag$AICc, current_diag$QS_p, current_diag$LB_p, NA_real_, NA_real_, NA_real_),
+    best = c(best_diag$AICc, best_diag$QS_p, best_diag$LB_p, NA_real_, NA_real_, NA_real_),
+    difference = c(
+      best_diag$AICc - current_diag$AICc,
+      best_diag$QS_p - current_diag$QS_p,
+      best_diag$LB_p - current_diag$LB_p,
+      sa_l1,
+      seasonal_rms,
+      seasonal_corr
+    )
+  )
+
+  structure(
+    list(
+      decision = sa_should_switch(res),
+      summary = summary,
+      series = list(
+        current_sa = current_sa,
+        best_sa = best_sa,
+        current_seasonal = current_seasonal,
+        best_seasonal = best_seasonal,
+        aligned_sa = aligned_sa,
+        aligned_seasonal = aligned_seasonal
+      ),
+      diagnostics = list(current = current_diag, best = best_diag),
+      table = diag_tbl
+    ),
+    class = "seasight_sa_compare"
+  )
 }
 
 # NOTE:

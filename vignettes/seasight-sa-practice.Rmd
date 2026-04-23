@@ -22,8 +22,6 @@ library(dplyr)
 library(tsbox)
 ```
 
-# Seasonal adjustment in practice: implementing common recommendations with seasight
-
 Seasonal adjustment is one of those tasks that looks “routine” from the outside, but quickly becomes delicate once you are responsible for official statistics or policy-relevant indicators. Decisions about transformation, calendar adjustment, model choice and revision tolerance all leave fingerprints on published series – and international guidelines (from statistical offices and central banks) rightly insist on transparency, stability and clear documentation.
 
 This vignette shows how **seasight** can help put such recommendations into practice. In **Part I**, we summarise internationally common good-practice principles for seasonal adjustment – as reflected, for example, in manuals from European and national statistical offices and in the applied time-series literature. We deliberately focus on a small set of recurring themes: when to seasonally adjust (and when not), how to treat calendar effects, what “parsimonious and stable” really means, and how to handle model review and revisions.
@@ -235,7 +233,8 @@ res <- auto_seasonal_analysis(
   y              = y,
   engine         = "auto",
   td_usertype    = "td",
-  include_easter = "auto"
+  include_easter = "auto",
+  max_specs      = 3
 )
 
 names(res)
@@ -248,9 +247,10 @@ The `seasonality` component summarises the main evidence:
 ```{r sa-auto-seasonality, eval = FALSE}
 res$seasonality$overall
 #> contains tests / calls such as:
-#> - call_overall   : textual summary (e.g. "SA advisable")
-#> - call_td        : recommendation on trading days
-#> - call_easter    : recommendation on Easter regressor
+#> - call_overall     : "ADJUST", "BORDERLINE" or "DO_NOT_ADJUST"
+#> - share_ids        : share of candidates with identifiable seasonality
+#> - share_qsori      : share with QS evidence on the original series
+#> - share_m7_strong  : share with strong M7 evidence
 ```
 
 To connect this directly to a “do not adjust” rule, you can use the
@@ -290,14 +290,14 @@ The candidate table can be inspected directly:
 ```{r sa-candidate-table, eval = FALSE}
 head(res$table[
   ,
-  c("model_label", "arima", "M7", "IDS", "QS_SA", "LB_p", "rev_mae")
+  c("model_label", "arima", "M7", "IDS", "QS_p", "LB_p", "rev_mae")
 ])
 ```
 
 This lets you check at a glance:
 
 * the ARIMA structure (`arima`),
-* core diagnostics (`M7`, `IDS`, `QS_SA`, `LB_p`),
+* core diagnostics (`M7`, `IDS`, `QS_p`, `LB_p`),
 * and a simple revision metric (`rev_mae`) if revision data are
   available.
 
@@ -367,7 +367,8 @@ res_td <- auto_seasonal_analysis(
   y              = y,
   engine         = "auto",
   td_candidates  = td,
-  include_easter = "auto"
+  include_easter = "auto",
+  max_specs      = 3
 )
 ```
 
@@ -387,7 +388,8 @@ res_td2 <- auto_seasonal_analysis(
   y              = y,
   engine         = "auto",
   td_candidates  = td2,
-  include_easter = "off"
+  include_easter = "off",
+  max_specs      = 3
 )
 ```
 
@@ -411,11 +413,12 @@ The result table tells you whether the winning model used an xreg, and which one
 res_td$table[1, c("model_label", "with_td", "td_name", "with_easter", "engine", "QS_p", "LB_p")]
 ```
 
-And the text summary in `res$seasonality` makes the overall treatment explicit:
+The first row records the selected treatment. The overall seasonality component
+records whether the series should be adjusted, reviewed as borderline, or left
+unadjusted:
 
 ```{r sa-td-calls, eval = FALSE}
-res_td$seasonality$overall$call_td
-res_td$seasonality$overall$call_easter
+res_td$seasonality$overall$call_overall
 ```
 
 > **K.I.S.S. punchlines**
@@ -456,7 +459,8 @@ res_baseline <- auto_seasonal_analysis(
   current_model  = m_current,
   engine         = "auto",
   td_usertype    = "td",
-  include_easter = "auto"
+  include_easter = "auto",
+  max_specs      = 3
 )
 ```
 
@@ -465,19 +469,17 @@ baseline. To decide whether a switch is warranted:
 
 ```{r sa-switch-decision, eval = FALSE}
 sa_should_switch(res_baseline)
-#> "KEEP_BASELINE" / "SWITCH_TO_BEST" / similar coded decision
+#> "KEEP_CURRENT_MODEL" or "CHANGE_TO_NEW_MODEL"
 ```
 
 For a more detailed view, `sa_compare()` produces a structured
-comparison of baseline and best model, typically including a compact set
-of revision metrics, diagnostic differences and possibly narrative text:
+comparison of baseline and best model, including diagnostics and aligned
+seasonally adjusted and seasonal-component series where available:
 
 ```{r sa-compare, eval = FALSE}
-cmp <- sa_compare(
-  best    = res_baseline$best,
-  current = m_current
-)
+cmp <- sa_compare(res_baseline, m_current)
 cmp
+cmp$summary
 ```
 
 This supports the idea of a **stable production model** (kept unchanged
@@ -487,7 +489,7 @@ between releases) combined with periodic, well-documented model reviews.
 >
 > * `current_model` lets you treat the existing production spec as an explicit baseline.
 > * `sa_should_switch()` implements a transparent decision rule for model changes.
-> * `sa_compare()` summarises the impact of switching in terms of diagnostics and revisions.
+> * `sa_compare()` summarises the impact of switching in terms of diagnostics and aligned series.
 
 ### 3.5 Documentation, transparency and reproducibility
 
@@ -507,19 +509,19 @@ To generate a report for the automatic analysis:
 ```{r sa-report, eval = FALSE}
 sa_report_html(
   res,
-  file = "AirPassengers_seasight_report.html"
+  file = tempfile("AirPassengers_seasight_report-", fileext = ".html")
 )
 #> Opens an HTML report with:
 #> - key diagnostics
 #> - top candidates table
-#> - plots for original, SA and calendar-adjusted series
+#> - plots for original and seasonally adjusted series
 #> - (if baseline provided) comparison of best vs current model
 ```
 
 To obtain a reproducible call for your chosen specification:
 
 ```{r sa-copy-call, eval = FALSE}
-sa_copyable_call(res$best)
+sa_copyable_call(res$best, x_expr = "y")
 #> Returns a clean seas(...) call as text, ready to paste into your
 #> production scripts or metadata system.
 ```
@@ -535,5 +537,3 @@ Together, these tools make it easier to:
 > * `sa_report_html()` turns a technical analysis into a readable, archivable document.
 > * `sa_copyable_call()` ensures that every chosen model has a clean, reproducible code representation.
 > * This aligns directly with guideline demands for transparent, well-documented seasonal adjustment.
-
-

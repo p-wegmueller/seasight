@@ -20,6 +20,13 @@ NULL
 #' (QS tests, residual checks, revision metrics, distance to a baseline
 #' model, etc.), and ranks candidates using a composite score. Returns
 #' the best model together with a diagnostic table and seasonality call.
+#' The function may fit several X-13 models; use `max_specs` for fast
+#' exploratory runs and larger grids for review runs.
+#'
+#' Ranking combines residual seasonality on the adjusted series (`QS_p`),
+#' Ljung-Box residual diagnostics, AICc, revision metrics for the top
+#' candidates, distance from an incumbent model when supplied, and a small
+#' engine-preference penalty.
 #'
 #' @param y A time series (`ts`) or an object that can be converted to `ts`
 #'   via `tsbox::ts_ts()`.
@@ -134,16 +141,6 @@ auto_seasonal_analysis <- function(y,
                                    outlier_method   = "AddOne",
                                    outlier_critical = 4,
                                    outlier_alpha    = NULL) {
-  
-  # --- small internal helpers --------------------------------------------------
-  .aicc <- function(m) {
-    # AICc = AIC + [2k(k+1)] / (n - k - 1)
-    aic <- suppressWarnings(tryCatch(stats::AIC(m), error = function(e) NA_real_))
-    k   <- suppressWarnings(tryCatch(length(stats::coef(m)), error = function(e) NA_integer_))
-    n   <- suppressWarnings(tryCatch(length(stats::na.omit(seasonal::original(m))), error = function(e) NA_integer_))
-    if (!is.finite(aic) || !is.finite(k) || !is.finite(n) || n <= (k + 1)) return(aic)
-    aic + (2 * k * (k + 1)) / (n - k - 1)
-  }
   
   # prefer a project-level ranker; else use a robust fallback
   .ranker <- get0(".rank_candidates", mode = "function", inherits = TRUE)

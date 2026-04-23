@@ -72,7 +72,7 @@ library(seasonal)
 
 y <- AirPassengers
 
-res <- auto_seasonal_analysis(y)
+res <- auto_seasonal_analysis(y, max_specs = 3)
 
 res$best
 head(res$table)
@@ -80,7 +80,8 @@ res$seasonality$overall
 
 out <- sa_report_html(
   y = y,
-  outfile = "sa_airpassengers.html"
+  max_specs = 3,
+  outfile = tempfile("sa_airpassengers-", fileext = ".html")
 )
 
 out$report
@@ -104,7 +105,8 @@ current_model <- seas(
 res <- auto_seasonal_analysis(
   y = y,
   current_model = current_model,
-  engine = "auto"
+  engine = "auto",
+  max_specs = 3
 )
 
 sa_should_switch(res)
@@ -112,9 +114,30 @@ sa_should_switch(res)
 sa_report_html(
   y = y,
   current_model = current_model,
-  outfile = "sa_airpassengers_with_baseline.html"
+  max_specs = 3,
+  outfile = tempfile("sa_airpassengers_with_baseline-", fileext = ".html")
 )
 ```
+
+## Decision Rules And Runtime
+
+`auto_seasonal_analysis()` may fit several X-13 models: default specifications,
+optional `seasonal::fivebestmdl()` specifications, no-trading-day and
+trading-day candidates, and in `engine = "auto"` mode both SEATS and X-11
+attempts. Use `max_specs` for quick exploratory runs and increase the grid only
+when you need a broader review.
+
+Model ranking combines residual seasonality on the adjusted series (`QS_p`),
+Ljung-Box residual diagnostics, AICc, revision metrics for the top candidates,
+distance from any incumbent model, and an engine-preference penalty. The
+switching helper `sa_should_switch()` is deliberately narrower: it checks the
+best row against configurable thresholds for QS, Ljung-Box, distance to the
+incumbent and seasonal-component correlation, returning either
+`"CHANGE_TO_NEW_MODEL"` or `"KEEP_CURRENT_MODEL"`.
+
+`sa_report_html()` writes an HTML file. In examples, use `tempfile()` or an
+explicit review-output path so report generation does not unexpectedly create
+files in your project root.
 
 ## Try Alternative Trading-Day Regressors
 

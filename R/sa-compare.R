@@ -1,5 +1,13 @@
 #' Should we switch to the new best model?
 #'
+#' Applies a conservative switching gate to the first row of `res$table`.
+#' The best candidate must pass residual QS and Ljung-Box thresholds, must not
+#' be too far from the incumbent relative to the candidate set, and must retain
+#' sufficient seasonal-component correlation when that comparison is available.
+#' AICc, revision metrics and engine preference affect the ranking in
+#' [auto_seasonal_analysis()], but are not directly re-applied by this switching
+#' helper.
+#'
 #' @param res Result of [auto_seasonal_analysis()].
 #' @param thresholds Named list with decision thresholds:
 #'   - min_qs_p: minimum acceptable QS p-value on SA (overall) for the best model
@@ -21,7 +29,12 @@ sa_should_switch <- function(res,
                                                max_dist_sa_mult = 1.25,
                                                min_corr_seas = 0.90,
                                                min_lb_p = 0.05)) {
-  stopifnot(inherits(res, "auto_seasonal_analysis"))
+  if (!inherits(res, "auto_seasonal_analysis")) {
+    stop("`res` must be an object returned by `auto_seasonal_analysis()`.", call. = FALSE)
+  }
+  if (!is.data.frame(res$table) || !nrow(res$table)) {
+    stop("`res$table` must contain at least one candidate row.", call. = FALSE)
+  }
   br <- dplyr::slice(res$table, 1)
   
   # extract thresholds safely (provide defaults if unnamed / missing)
@@ -144,15 +157,6 @@ sa_existence_card <- function(res) .build_existence_card(res)
 
 
 # --- Compare incumbent vs new best --------------------------------------------
-
-# local AICc helper (safe across engines)
-.aicc <- function(m) {
-  aic <- suppressWarnings(tryCatch(stats::AIC(m), error = function(e) NA_real_))
-  k   <- suppressWarnings(tryCatch(length(stats::coef(m)), error = function(e) NA_integer_))
-  n   <- suppressWarnings(tryCatch(length(stats::na.omit(seasonal::original(m))), error = function(e) NA_integer_))
-  if (!is.finite(aic) || !is.finite(k) || !is.finite(n) || n <= (k + 1)) return(aic)
-  aic + (2 * k * (k + 1)) / (n - k - 1)
-}
 
 .build_compare_html <- function(prev, best) {
   df_prev <- if (!is.null(prev)) .coef_table_df(prev) else tibble::tibble()

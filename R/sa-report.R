@@ -59,16 +59,7 @@ sa_issue_report_html <- function(
     outlier_alpha    = NULL
 ){
   # ---------- small helpers -------------------------------------------------
-  
-  # Local AICc helper (safe across engines)
-  .aicc <- function(m) {
-    aic <- suppressWarnings(tryCatch(stats::AIC(m), error = function(e) NA_real_))
-    k   <- suppressWarnings(tryCatch(length(stats::coef(m)), error = function(e) NA_integer_))
-    n   <- suppressWarnings(tryCatch(length(stats::na.omit(seasonal::original(m))), error = function(e) NA_integer_))
-    if (!is.finite(aic) || !is.finite(k) || !is.finite(n) || n <= (k + 1)) return(aic)
-    aic + (2 * k * (k + 1)) / (n - k - 1)
-  }
-  
+
   .render_top_candidates_table <- function(df) {
     # Render compact HTML table for the "Top candidates" block.
     has <- function(nm) nm %in% names(df)
@@ -694,6 +685,9 @@ document.addEventListener('click', function(e){
 #' User-facing wrapper that runs the automatic seasonal analysis and writes a
 #' human-readable HTML report with plots, tables, diagnostics, and
 #' copy-pasteable `seas()` calls.
+#' The report fits the same candidate grid as [auto_seasonal_analysis()] and
+#' can therefore take noticeable time on broad grids. Use `max_specs` for quick
+#' exploratory reports.
 #'
 #' Notes:
 #' - If the provided *current* specification equals the selected *best* model,

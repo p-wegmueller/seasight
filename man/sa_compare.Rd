@@ -2,7 +2,7 @@
 % Please edit documentation in R/sa-diagnostics.R
 \name{sa_compare}
 \alias{sa_compare}
-\title{Comparison wrapper (current vs best)}
+\title{Compare an incumbent model with the selected best model}
 \usage{
 sa_compare(res, current_model)
 }
@@ -12,11 +12,15 @@ sa_compare(res, current_model)
 \item{current_model}{A fitted \code{seas} object to compare against.}
 }
 \value{
-List with \code{decision}, \code{summary}, and aligned SA/seasonal series.
+A list of class \code{"seasight_sa_compare"} with elements:
+\code{decision}, \code{summary}, \code{series}, \code{diagnostics}, and \code{table}.
 }
 \description{
-Thin wrapper around \code{compare_to_current()} returning its result.
-If \code{compare_to_current()} is not found, an informative error is raised.
+Summarises the incumbent \code{current_model} against the best model stored in an
+\code{\link[=auto_seasonal_analysis]{auto_seasonal_analysis()}} result. The comparison is intentionally compact:
+it reports key diagnostics, the switching decision from \code{\link[=sa_should_switch]{sa_should_switch()}},
+and aligned seasonally adjusted and seasonal-component series when they are
+available.
 }
 \examples{
 \donttest{
@@ -27,9 +31,7 @@ if (requireNamespace("seasonal", quietly = TRUE)) {
     current_model = current_model,
     max_specs = 3
   )
-  if (exists("compare_to_current", mode = "function")) {
-    sa_compare(res, current_model)
-  }
+  sa_compare(res, current_model)
 }
 }
 }

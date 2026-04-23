@@ -23,6 +23,14 @@ NULL
 
 # --- Utilities -----------------------------------------------------------------
 
+.aicc <- function(m) {
+  aic <- suppressWarnings(tryCatch(stats::AIC(m), error = function(e) NA_real_))
+  k   <- suppressWarnings(tryCatch(length(stats::coef(m)), error = function(e) NA_integer_))
+  n   <- suppressWarnings(tryCatch(length(stats::na.omit(seasonal::original(m))), error = function(e) NA_integer_))
+  if (!is.finite(aic) || !is.finite(k) || !is.finite(n) || n <= (k + 1)) return(aic)
+  aic + (2 * k * (k + 1)) / (n - k - 1)
+}
+
 .m7_stat <- function(m) {
   # X-11 M7 statistic from an X-11 decomposition of the model's original series
   tryCatch(

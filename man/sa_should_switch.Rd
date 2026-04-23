@@ -25,7 +25,13 @@ sa_should_switch(
 One of "CHANGE_TO_NEW_MODEL" or "KEEP_CURRENT_MODEL".
 }
 \description{
-Should we switch to the new best model?
+Applies a conservative switching gate to the first row of \code{res$table}.
+The best candidate must pass residual QS and Ljung-Box thresholds, must not
+be too far from the incumbent relative to the candidate set, and must retain
+sufficient seasonal-component correlation when that comparison is available.
+AICc, revision metrics and engine preference affect the ranking in
+\code{\link[=auto_seasonal_analysis]{auto_seasonal_analysis()}}, but are not directly re-applied by this switching
+helper.
 }
 \examples{
 \donttest{

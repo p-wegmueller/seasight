@@ -101,6 +101,9 @@ Invisibly, a list with elements \code{report} (path to the HTML file) and
 User-facing wrapper that runs the automatic seasonal analysis and writes a
 human-readable HTML report with plots, tables, diagnostics, and
 copy-pasteable \code{seas()} calls.
+The report fits the same candidate grid as \code{\link[=auto_seasonal_analysis]{auto_seasonal_analysis()}} and
+can therefore take noticeable time on broad grids. Use \code{max_specs} for quick
+exploratory reports.
 }
 \details{
 Notes:

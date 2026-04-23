@@ -143,6 +143,14 @@ Runs a grid of X-13ARIMA-SEATS specifications, computes diagnostics
 (QS tests, residual checks, revision metrics, distance to a baseline
 model, etc.), and ranks candidates using a composite score. Returns
 the best model together with a diagnostic table and seasonality call.
+The function may fit several X-13 models; use \code{max_specs} for fast
+exploratory runs and larger grids for review runs.
+}
+\details{
+Ranking combines residual seasonality on the adjusted series (\code{QS_p}),
+Ljung-Box residual diagnostics, AICc, revision metrics for the top
+candidates, distance from an incumbent model when supplied, and a small
+engine-preference penalty.
 }
 \examples{
 \donttest{

@@ -119,6 +119,14 @@ sa_top_candidates_table(
 * ⭐ rows highlight the **current** model in blue (even if it is not in the top-5).
 * The airline model ARIMA(0 1 1)(0 1 1) is appended in red if available.
 
+For a programmatic comparison, use `sa_compare()`:
+
+```{r compare-objects}
+cmp <- sa_compare(res, m_current)
+cmp$decision
+cmp$summary
+```
+
 ## 2. Providing calendar regressors (trading days, moving holidays)
 
 Eurostat guidelines recommend treating calendar effects (working-day, leap-year,
@@ -162,7 +170,8 @@ res_td <- auto_seasonal_analysis(
   td_candidates  = list(lenmonth = td_len),
   td_usertype    = "td",
   include_easter = "auto",
-  engine         = "auto"
+  engine         = "auto",
+  max_specs      = 3
 )
 
 head(res_td$table)
@@ -267,8 +276,7 @@ The function returns a string, typically:
 * `"CHANGE_TO_NEW_MODEL"` or
 * `"KEEP_CURRENT_MODEL"`.
 
-Internally, it uses the *best* row of `res$table` and compares against the
-current model (if supplied). The rule checks, for instance:
+Internally, it uses the *best* row of `res$table`. The rule checks:
 
 * **Residual diagnostics:**
   The new model must pass basic tests (QS on SA, Ljung–Box). If the best model
@@ -276,27 +284,31 @@ current model (if supplied). The rule checks, for instance:
   the recommendation is to **keep** the current model.
 
 * **Similarity of seasonal pattern:**
-  If the new model’s seasonal factors are almost perfectly correlated with the
-  current ones (e.g. correlation > 0.995 and very small L1 distance), there is
-  little reason to switch.
+  The seasonal factors should remain sufficiently correlated with the
+  incumbent when an incumbent comparison is available.
 
-* **Score and revisions:**
-  If the new model improves AICc, residual diagnostics *and* revision metrics
-  (where available) by a reasonable margin, switching is encouraged.
+* **Distance to incumbent:**
+  The candidate's seasonally adjusted series should not be an outlying distance
+  from the incumbent relative to the candidate set.
+
+The broader ranking step in `auto_seasonal_analysis()` also uses AICc, revision
+metrics for the top candidates, distance-to-incumbent diagnostics and an engine
+preference penalty. Those quantities determine which row is considered "best";
+`sa_should_switch()` then applies the narrower switching gate to that row.
 
 You can tune the thresholds via arguments such as
 
 ```r
 sa_should_switch(
   res_td,
-  thr_qs   = 0.10,
-  thr_lb   = 0.05,
-  thr_corr = 0.995,
-  thr_dist = 0.5
+  thresholds = list(
+    min_qs_p = 0.10,
+    min_lb_p = 0.05,
+    min_corr_seas = 0.90,
+    max_dist_sa_mult = 1.25
+  )
 )
 ```
-
-(Argument names may evolve; see `?sa_should_switch` for the current interface.)
 
 ### 3.3 Putting it together: a minimal decision wrapper
 
