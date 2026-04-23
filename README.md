@@ -4,6 +4,9 @@
 [![Project Status: Active](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
 [![R-CMD-check](https://github.com/p-wegmueller/seasight/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/p-wegmueller/seasight/actions/workflows/R-CMD-check.yaml)
 [![pkgdown](https://github.com/p-wegmueller/seasight/actions/workflows/pkgdown.yaml/badge.svg)](https://p-wegmueller.github.io/seasight/)
+[![Codecov test coverage](https://codecov.io/gh/p-wegmueller/seasight/branch/main/graph/badge.svg)](https://app.codecov.io/gh/p-wegmueller/seasight?branch=main)
+[![lint](https://github.com/p-wegmueller/seasight/actions/workflows/lint.yaml/badge.svg)](https://github.com/p-wegmueller/seasight/actions/workflows/lint.yaml)
+[![pkgcheck](https://github.com/p-wegmueller/seasight/workflows/pkgcheck/badge.svg)](https://github.com/p-wegmueller/seasight/actions?query=workflow%3Apkgcheck)
 [![Lifecycle: maturing](https://img.shields.io/badge/lifecycle-maturing-blue.svg)](https://lifecycle.r-lib.org/articles/stages.html#maturing)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 <!-- badges: end -->

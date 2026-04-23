@@ -1,0 +1,22 @@
+name: pkgcheck
+
+on:
+  workflow_run:
+    workflows: ["R-CMD-check.yaml"]
+    types: [completed]
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pkgcheck:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: ropensci-review-tools/pkgcheck-action@main
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
+          post-to-issue: false

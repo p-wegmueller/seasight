@@ -1,0 +1,8 @@
+linters: list(
+    absolute_path_linter()
+  )
+exclusions: list(
+    "docs",
+    "inst/sticker.R",
+    "vignettes"
+  )

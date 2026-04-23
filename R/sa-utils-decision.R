@@ -29,21 +29,21 @@
 .qs_sa_from_row <- function(row) {
   r <- if (is.data.frame(row)) as.list(row[1, , drop = FALSE]) else row
   # Prefer unified overall QS on SA if present
-  q <- suppressWarnings(as.numeric(r$QS_p))
-  if (is.finite(q)) return(q)
+  q <- if ("QS_p" %in% names(r)) suppressWarnings(as.numeric(r$QS_p)) else NA_real_
+  if (length(q) && is.finite(q)) return(q)
   # Fallback: precomputed min, or compute from split cols
-  qmin <- suppressWarnings(as.numeric(r$qs_sa_min))
-  if (is.finite(qmin)) return(qmin)
-  qx <- suppressWarnings(as.numeric(r$QS_p_x11))
-  qs <- suppressWarnings(as.numeric(r$QS_p_seats))
+  qmin <- if ("qs_sa_min" %in% names(r)) suppressWarnings(as.numeric(r$qs_sa_min)) else NA_real_
+  if (length(qmin) && is.finite(qmin)) return(qmin)
+  qx <- if ("QS_p_x11" %in% names(r)) suppressWarnings(as.numeric(r$QS_p_x11)) else NA_real_
+  qs <- if ("QS_p_seats" %in% names(r)) suppressWarnings(as.numeric(r$QS_p_seats)) else NA_real_
   .safepmin(qx, qs)
 }
 
 .lb_from_row <- function(row) {
   r <- if (is.data.frame(row)) as.list(row[1, , drop = FALSE]) else row
-  lb <- suppressWarnings(as.numeric(r$LB_p))
-  if (is.finite(lb)) return(lb)
-  suppressWarnings(as.numeric(r$lb_p))
+  lb <- if ("LB_p" %in% names(r)) suppressWarnings(as.numeric(r$LB_p)) else NA_real_
+  if (length(lb) && is.finite(lb)) return(lb)
+  if ("lb_p" %in% names(r)) suppressWarnings(as.numeric(r$lb_p)) else NA_real_
 }
 
 # --- UI consistency helpers ---------------------------------------------------
@@ -168,7 +168,7 @@
   if (!"qs_sa_min" %in% names(out)) {
     out$qs_sa_min <- .safepmin(out[["QS_p_x11"]], out[["QS_p_seats"]])
     # if unified QS_p exists, prefer it when finite
-    if (is.finite(suppressWarnings(as.numeric(out$QS_p)))) {
+    if ("QS_p" %in% names(out) && is.finite(suppressWarnings(as.numeric(out$QS_p)))) {
       out$qs_sa_min <- suppressWarnings(as.numeric(out$QS_p))
     }
   }
