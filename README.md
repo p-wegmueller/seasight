@@ -13,50 +13,60 @@
 
 `seasight` provides R tools for seasonal adjustment diagnostics, model comparison and reproducible HTML reporting. It builds on [`seasonal`](https://cran.r-project.org/package=seasonal) and X-13ARIMA-SEATS, with workflows aimed at official statistics, macroeconomic monitoring and production review.
 
-## Key Features
+`seasight` is designed for teams that need more than a one-off adjustment:
+transparent diagnostics, comparable candidates, readable reports, and a
+workflow that survives handover across analysts and over time.
 
-- Seasonality diagnostics and decision rules: `sa_tests_model()`, `sa_existence_call()`, `sa_is_do_not_adjust()` and `sa_should_switch()` summarize QS, M7, IDS, Ljung-Box and switching logic.
-- Automatic model grid and ranking: `auto_seasonal_analysis()` compares candidate ARIMA, trading-day, Easter and engine choices.
-- Comparison and top-candidates tables: `sa_top_candidates_table()` highlights the selected model, current model and airline reference model.
-- Reproducible HTML reports: `sa_report_html()` writes a self-contained report with diagnostics, plots and copy-pasteable `seasonal::seas()` calls.
-- Explicit calendar regressors: `build_user_xreg()` and `td_candidates` make trading-day and moving-holiday choices auditable.
+Status: `seasight` is in a pre-submission stabilization phase. The `0.1.x`
+series focuses on a stable core workflow, stronger tests, and review-ready
+documentation.
 
-Status: `seasight` is now in a pre-submission stabilization phase. The core API listed below is frozen for the `0.1.x` series while documentation, testing and review artifacts are finalized.
+## Why `seasight`
 
-## Development workflow notes
+`seasight` complements rather than replaces
+[`seasonal`](https://cran.r-project.org/package=seasonal).
 
-When batching maintenance work, group related fixes together, but keep
-**report/UI rendering changes** in separate batches from **core
-helper/diagnostic logic** changes. This keeps reviews focused and makes
-regression risk easier to assess.
+- Use `seasonal` when you want direct manual control of a specific X-13 spec.
+- Use `seasight` when you want a reviewable workflow around those specs:
+  screening for apparent seasonality, generating candidate models, ranking
+  them with explicit diagnostics, and producing a report that colleagues can
+  inspect without reading the source code first.
 
-For every report/UI-focused batch, include a short **manual review
-checklist** describing the rendered elements to verify locally (for
-example cards, plots, tables, labels, and decision pills).
+This is especially useful in official statistics and macroeconomic production
+workflows, where revisions, analyst turnover, and repeated model review all
+matter.
 
+## Workflow
 
-## How `seasight` Differs From Alternatives
+<img src="man/figures/seasight_workflow.png" alt="seasight workflow from input series to seasonality check, candidate search, scoring, engine choice and reporting" width="100%" />
 
-`seasight` complements rather than replaces [`seasonal`](https://cran.r-project.org/package=seasonal).
+The package supports a six-step workflow:
 
-- Use **`seasonal`** when you need direct and fully manual control of X-13 specs.
-- Use **`seasight`** when you need a reviewable workflow around those specs: model grids, explicit diagnostics, ranked candidates, and reproducible report artifacts for production review.
+1. start from a raw quarterly or monthly series, with an optional current
+   production adjustment;
+2. check whether adjustment is warranted at all;
+3. search across candidate ARIMA, trading-day, Easter, outlier, and engine
+   choices;
+4. score and filter candidates using diagnostics such as QS, Ljung-Box, AICc,
+   revisions, and distance to the incumbent;
+5. compare SEATS and X-11 when both are relevant;
+6. generate a self-contained HTML report with plots, rationale, and copy-paste
+   `seasonal::seas()` code.
 
-Compared with ad hoc scripts, `seasight` emphasizes:
+The aim is not full automation without judgment. It is a human-in-the-loop
+review workflow with explicit rules and outputs that are easy to audit,
+communicate, and revisit later.
 
-- explicit decision rules (`sa_existence_call()`, `sa_should_switch()`),
-- standardized candidate ranking (`score_100` with auditable component metrics),
-- and HTML outputs designed for institutional review and handover (`sa_report_html()`).
+## What You Can Do
 
-The package intentionally focuses on diagnostics/reporting orchestration and keeps the underlying decomposition engine in `seasonal`/X-13ARIMA-SEATS.
-
-## rOpenSci Statistical Review Target
-
-`seasight` targets the **bronze** statistical-software badge first, then incremental progression.
-A first standards mapping is tracked in `inst/ropensci/bronze-standards-mapping.md`.
-For submission-template consistency, the intended `statsgrade` value is
-`bronze`. The package is intended for CRAN after review and is not intended for
-Bioconductor.
+- Screen for apparent seasonality with `sa_tests_model()`,
+  `sa_existence_call()`, and `sa_is_do_not_adjust()`.
+- Run a bounded candidate search with `auto_seasonal_analysis()`.
+- Compare the preferred model with a current production model via
+  `sa_should_switch()`, `sa_compare()`, and `sa_top_candidates_table()`.
+- Build reproducible HTML reports with `sa_report_html()`.
+- Supply explicit trading-day and moving-holiday regressors with
+  `build_user_xreg()` and `td_candidates`.
 
 ## Installation
 
@@ -119,7 +129,7 @@ sa_report_html(
 )
 ```
 
-## Decision Rules And Runtime
+## Decision Logic In Brief
 
 `auto_seasonal_analysis()` may fit several X-13 models: default specifications,
 optional `seasonal::fivebestmdl()` specifications, no-trading-day and
@@ -138,6 +148,13 @@ incumbent and seasonal-component correlation, returning either
 `sa_report_html()` writes an HTML file. In examples, use `tempfile()` or an
 explicit review-output path so report generation does not unexpectedly create
 files in your project root.
+
+## Built For Review
+
+`seasight` was designed for settings where seasonal adjustment decisions need
+to be documented and explained, not just computed. The report output is meant
+to support internal review, communication with subject-matter experts, and
+reproducible handover across analysts.
 
 ## Try Alternative Trading-Day Regressors
 
@@ -196,34 +213,12 @@ extract_outliers(m)
 sa_copyable_call(m, x_expr = "AirPassengers")
 ```
 
-## Documentation And Articles
+## Learn More
 
 - Getting started: `vignettes/seasight-getting-started.Rmd`
 - Advanced usage: `vignettes/seasight-advanced.Rmd`
 - Seasonal adjustment in practice: `vignettes/seasight-sa-practice.Rmd`
 - SEATS seasonal component absent: `vignettes/seasight-seats-absent.Rmd`
-
-## Local Build Checklist
-
-Before running pkgdown or a package check locally:
-
-1. Restart the R session to release package DLL locks.
-2. Close open HTML previews, plot devices and file viewers that may hold output files.
-3. Remove stale build directories only when they are generated artifacts (`docs/`, `pkgdown/`, temporary report folders).
-4. Run targeted tests before broader checks.
-5. For pkgdown, prefer a fresh process:
-
-```r
-devtools::load_all()
-devtools::test()
-pkgdown::build_site(new_process = TRUE, install = TRUE)
-```
-
-If `readRDS()` or package-locking errors appear, restart R and retry from a clean session before changing code.
-
-## Development Workflow Notes
-
-When batching issues, keep report/UI rendering changes separate from core helper and diagnostic logic whenever practical. For report/UI batches, include a short manual review checklist of rendered elements to inspect locally, such as cards, plots, tables, labels and decision pills.
 
 ## Contributing
 
