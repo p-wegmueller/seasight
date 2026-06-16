@@ -1,9 +1,7 @@
-citHeader("To cite seasight in publications use:")
-
-citEntry(
-  entry = "Manual",
+bibentry(
+  bibtype = "Manual",
   title = "seasight: Tools for Seasonal Adjustment Diagnostics and Reporting",
-  author = personList(
+  author = c(
     person(given = "Philipp", family = "Wegmüller")
   ),
   year = "2026",

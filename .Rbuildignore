@@ -10,3 +10,5 @@
 ^\.Rproj\.user$
 ^\.github$
 ^README\.html$
+^\.lintr$
+^tests/testthat/Rplots\.pdf$

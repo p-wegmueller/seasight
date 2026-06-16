@@ -220,6 +220,15 @@ sa_copyable_call(m, x_expr = "AirPassengers")
 - Seasonal adjustment in practice: `vignettes/seasight-sa-practice.Rmd`
 - SEATS seasonal component absent: `vignettes/seasight-seats-absent.Rmd`
 
+## Citation
+
+If you use `seasight` in research, policy work, or production documentation,
+please cite the package metadata:
+
+```r
+citation("seasight")
+```
+
 ## Contributing
 
 Feedback from practitioners is welcome, especially from statistical offices, central banks, finance ministries and researchers working with real-time macroeconomic data and revisions. Please open issues for bugs, diagnostics gaps or report improvements.
