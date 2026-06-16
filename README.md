@@ -7,7 +7,7 @@
 [![Codecov test coverage](https://codecov.io/gh/p-wegmueller/seasight/branch/main/graph/badge.svg)](https://app.codecov.io/gh/p-wegmueller/seasight?branch=main)
 [![lint](https://github.com/p-wegmueller/seasight/actions/workflows/lint.yaml/badge.svg)](https://github.com/p-wegmueller/seasight/actions/workflows/lint.yaml)
 [![pkgcheck](https://github.com/p-wegmueller/seasight/workflows/pkgcheck/badge.svg)](https://github.com/p-wegmueller/seasight/actions?query=workflow%3Apkgcheck)
-[![Lifecycle: maturing](https://img.shields.io/badge/lifecycle-maturing-blue.svg)](https://lifecycle.r-lib.org/articles/stages.html#maturing)
+[![Lifecycle: stable](https://img.shields.io/badge/lifecycle-stable-brightgreen.svg)](https://lifecycle.r-lib.org/articles/stages.html#stable)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 <!-- badges: end -->
 
