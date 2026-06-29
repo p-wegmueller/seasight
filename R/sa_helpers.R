@@ -1113,9 +1113,22 @@ sa_align_regressor <- function(y, x) {
   zz <- as.matrix(z)
   keep <- stats::complete.cases(zz[, "prev"], zz[, "new"])
   if (!any(keep)) return(list(ok = FALSE, reason = "no_overlap"))
-  z <- z[keep, , drop = FALSE]
   
-  list(prev = z[, "prev"], new = z[, "new"], ok = TRUE, reason = "ok")
+  z_freq <- stats::frequency(a)
+  z_time <- as.numeric(stats::time(z)[keep])
+  if (length(z_time) > 1L) {
+    step <- 1 / z_freq
+    if (any(abs(diff(z_time) - step) > (step / 1000))) {
+      return(list(ok = FALSE, reason = "internal_gaps"))
+    }
+  }
+  
+  list(
+    prev = stats::ts(zz[keep, "prev"], start = z_time[1], frequency = z_freq),
+    new = stats::ts(zz[keep, "new"], start = z_time[1], frequency = z_freq),
+    ok = TRUE,
+    reason = "ok"
+  )
 }
 
 # ---- numeric rescalers / weights --------------------------------------------
