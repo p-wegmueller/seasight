@@ -364,14 +364,12 @@ NULL
   }
   
   # ---- helper: run seas safely ----------------------------------------------
-  .last_err <- NULL
   .run_try <- function(args) {
     z <- try(do.call(seasonal::seas, args), silent = TRUE)
     if (inherits(z, "try-error")) {
-      .last_err <<- as.character(z)
-      return(NULL)
+      return(list(model = NULL, error = as.character(z)))
     }
-    z
+    list(model = z, error = NULL)
   }
   
   # ---- SEATS padding: extend xreg into forecast horizon ----------------------
@@ -425,6 +423,7 @@ NULL
   
   for (eng_try in attempt_engines) {
     args1 <- make_args_for_engine(eng_try)
+    last_err <- NULL
     
     # only pad when attempting SEATS (not X11)
     if (td_used && identical(eng_try, "seats")) {
@@ -435,28 +434,37 @@ NULL
     }
     
     run1 <- .run_try(args1)
+    if (is.null(run1$model)) {
+      last_err <- run1$error
+    }
     
     # Fallback 1: drop usertype tokens (some X-13 builds are picky)
-    if (is.null(run1) && td_used) {
+    if (is.null(run1$model) && td_used) {
       alt1 <- args1
       alt1$regression.usertype <- NULL
       run1 <- .run_try(alt1)
+      if (is.null(run1$model)) {
+        last_err <- run1$error
+      }
     }
     
     # Fallback 2: conservative token "td"
-    if (is.null(run1) && td_used) {
+    if (is.null(run1$model) && td_used) {
       alt2 <- args1
       alt2$regression.usertype <- rep("td", ncol(args1$xreg %||% matrix(NA_real_, 0, 1)))
       run1 <- .run_try(alt2)
+      if (is.null(run1$model)) {
+        last_err <- run1$error
+      }
     }
     
     out <- c(out, list(list(
-      model       = run1,
+      model       = run1$model,
       with_td     = td_used,
       td_name     = td_name %||% NA_character_,
       with_easter = length(regvars) > 0,
       engine      = eng_try,
-      err         = if (is.null(run1)) (.last_err %||% "unknown error") else NA_character_
+      err         = if (is.null(run1$model)) (last_err %||% "unknown error") else NA_character_
     )))
   }
   
