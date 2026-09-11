@@ -52,11 +52,12 @@ NULL
 #' @param td_usertype Character string passed as `regression.usertype` when
 #'   `xreg` is used (default `"td"`).
 #' @param include_easter Controls inclusion of Easter regressors:
-#'   `"auto"` (default) lets the procedure decide, `"always"` always
-#'   includes Easter, `"off"` never includes Easter. A logical value is
-#'   also accepted and mapped to `"auto"`/`"off"`.
-#' @param easter_len Integer, length (in days) of the Easter effect when
-#'   included.
+#'   `"auto"` (default) asks X-13 to select among its supported Easter
+#'   windows or reject Easter, `"always"` fixes `easter[easter_len]`, and
+#'   `"off"` neither includes nor tests Easter. A logical value is also
+#'   accepted and mapped to `"auto"`/`"off"`.
+#' @param easter_len Integer, length (in days) of the Easter effect imposed by
+#'   `include_easter = "always"`. It is ignored in `"auto"` and `"off"` modes.
 #' @param include_history_top_n Integer, number of top-ranked models for
 #'   which revision metrics over the history are computed before the
 #'   final ranking step.
@@ -99,7 +100,8 @@ NULL
 #'
 #' @return An object of class `"auto_seasonal_analysis"` with components
 #'   such as `best` (best `seas` model), `table` (diagnostic and ranking
-#'   table), `specs_tried`, `frequency`, `transform`, `baseline`, and
+#'   table, including actual Easter inclusion in `with_easter` and its selected
+#'   window in `easter_window`), `specs_tried`, `frequency`, `transform`, `baseline`, and
 #'   `seasonality`. When `current_model` is supplied, `baseline` includes its
 #'   diagnostics and an indicator of whether its AICc is comparable with the
 #'   selected candidate.
@@ -223,6 +225,7 @@ auto_seasonal_analysis <- function(y,
       with_td = FALSE,
       td_name = NA_character_,
       with_easter = FALSE,
+      easter_window = NA_integer_,
       engine = NA_character_,
       AICc = NA_real_,
       M7 = NA_real_,
@@ -398,6 +401,7 @@ auto_seasonal_analysis <- function(y,
   # Collapse bundles to flat vectors (keep only successfully estimated models)
   fits <- list(); labels <- character(0)
   with_td_flag <- logical(0); with_easter_flag <- logical(0)
+  easter_window_vec <- integer(0)
   td_name_vec <- character(0)
   
   for (i in seq_along(fit_bundles)) {
@@ -409,6 +413,7 @@ auto_seasonal_analysis <- function(y,
       labels           <- c(labels, paste0("Spec_", length(fits)))
       with_td_flag     <- c(with_td_flag,     isTRUE(b$with_td))
       with_easter_flag <- c(with_easter_flag, isTRUE(b$with_easter))
+      easter_window_vec <- c(easter_window_vec, as.integer(b$easter_window %||% NA_integer_))
       td_name_vec      <- c(td_name_vec,      b$td_name %||% NA_character_)
     }
   }
@@ -422,6 +427,7 @@ auto_seasonal_analysis <- function(y,
       with_td     = with_td_flag[[i]],
       td_name     = td_name_vec[[i]],
       with_easter = with_easter_flag[[i]],
+      easter_window = easter_window_vec[[i]],
       engine      = .engine_used(m),
       AICc        = tryCatch(.aicc(m), error = function(e) NA_real_),
       M7          = tryCatch(.m7_stat(m), error = function(e) NA_real_),

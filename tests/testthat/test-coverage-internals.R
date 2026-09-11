@@ -382,6 +382,7 @@ test_that("auto workflow can be exercised with mocked model fitting", {
       model = fake,
       with_td = !is.null(td_xreg),
       with_easter = include_easter_mode != "off",
+      easter_window = if (include_easter_mode != "off") 8L else NA_integer_,
       engine = if (identical(engine, "auto")) "seats" else engine
     ))
   }

@@ -2,6 +2,9 @@
 
 ## Submission-readiness update
 
+- Fix `include_easter = "auto"` so X-13 tests and selects the Easter effect
+  instead of always imposing `easter[15]`. Candidate metadata and HTML reports
+  now show the Easter window actually retained by the fitted model.
 - Make `sa_should_switch()` compare the selected candidate directly with the
   incumbent. Identical adjustments are kept, a change requires a material
   comparable AICc improvement without diagnostic regression, and missing or

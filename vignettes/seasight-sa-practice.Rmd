@@ -410,7 +410,10 @@ to avoid SEATS’ reliance on that internal forecast horizon.
 The result table tells you whether the winning model used an xreg, and which one:
 
 ```{r sa-td-inspect, eval = FALSE}
-res_td$table[1, c("model_label", "with_td", "td_name", "with_easter", "engine", "QS_p", "LB_p")]
+res_td$table[1, c(
+  "model_label", "with_td", "td_name", "with_easter", "easter_window",
+  "engine", "QS_p", "LB_p"
+)]
 ```
 
 The first row records the selected treatment. The overall seasonality component

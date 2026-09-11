@@ -38,6 +38,13 @@ t_safe <- function(x) {
   if (nzchar(lab)) lab else "yes"
 }
 
+.report_easter_label <- function(row) {
+  with_easter <- isTRUE(suppressWarnings(as.logical(.report_get(row, "with_easter", FALSE))))
+  if (!with_easter) return("none")
+  window <- suppressWarnings(as.integer(.report_get(row, "easter_window", NA_integer_)))
+  if (is.finite(window)) paste0("easter[", window, "]") else "included"
+}
+
 .report_arima <- function(row) {
   out <- tryCatch(.coalesce_arima_str(row), error = function(e) NA_character_)
   if (is.character(out) && length(out) == 1L && !is.na(out) && nzchar(out)) return(out)
@@ -64,7 +71,8 @@ t_safe <- function(x) {
   n_ranked <- min(as.integer(n), n_total)
 
   disp_cols <- c(
-    "model_label", "arima", "with_td", "td_name", "td_label", "score_100",
+    "model_label", "arima", "with_td", "td_name", "td_label", "with_easter",
+    "easter_window", "score_100",
     "AICc", "LB_p", "QSori_p", "QS_p_x11", "QS_p_seats", "QS_p",
     "td_p", "vola_reduction_pct", "seasonal_amp_pct", "dist_sa_L1", "rev_mae"
   )
@@ -87,12 +95,15 @@ t_safe <- function(x) {
     if (!is.null(prev_arima) && !any(.report_norm(top$arima) == .report_norm(prev_arima), na.rm = TRUE)) {
       qb <- tryCatch(.qs_on_sa_both(current_model), error = function(e) tibble::tibble(QS_p_x11 = NA_real_, QS_p_seats = NA_real_, QS_p = NA_real_))
       qo <- tryCatch(.qs_original(current_model), error = function(e) tibble::tibble(QSori_p = NA_real_))
+      current_easter <- .easter_metadata(current_model)
       prev_row <- tibble::tibble(
         model_label = "current",
         arima = .report_norm(prev_arima),
         with_td = FALSE,
         td_name = NA_character_,
         td_label = NA_character_,
+        with_easter = current_easter$with_easter,
+        easter_window = current_easter$easter_window,
         score_100 = NA_real_,
         AICc = tryCatch(.aicc(current_model), error = function(e) NA_real_),
         LB_p = tryCatch(.lb_p(current_model), error = function(e) NA_real_)
@@ -114,7 +125,7 @@ t_safe <- function(x) {
   top$is_airline <- .report_norm(top$arima) == .report_norm(airline_arima)
 
   header <- htmltools::tags$tr(lapply(
-    c("Label", "ARIMA", "Score (0-100)", "TD regressor", "AICc", "LB p", "QSori p",
+    c("Label", "ARIMA", "Score (0-100)", "TD regressor", "Easter", "AICc", "LB p", "QSori p",
       "QS X-11 p", "QS SEATS p", "QS min", "TD p", "Volatility red. %",
       "Seasonal amp %", "L1 vs prev SA", "Rev. MAE"),
     htmltools::tags$th
@@ -129,6 +140,7 @@ t_safe <- function(x) {
       htmltools::tags$td(htmltools::tags$span(class = "model-spec", esc(.report_arima(r)))),
       htmltools::tags$td(.report_num(.report_get(r, "score_100"), 1)),
       htmltools::tags$td(esc(.report_td_label(r))),
+      htmltools::tags$td(esc(.report_easter_label(r))),
       htmltools::tags$td(.report_num(.report_get(r, "AICc"), 2)),
       htmltools::tags$td(.report_p(.report_get(r, "LB_p"))),
       htmltools::tags$td(.report_p(.report_get(r, "QSori_p"))),
@@ -190,6 +202,11 @@ t_safe <- function(x) {
   arima_best <- if (!is.null(override_best_arima) && nzchar(override_best_arima)) override_best_arima else .report_arima(br)
   with_td <- isTRUE(suppressWarnings(as.logical(get1(br, "with_td", FALSE))))
   td_txt <- if (with_td) paste0("with TD regressor ", esc(.report_td_label(br))) else "without TD"
+  easter_txt <- if (isTRUE(suppressWarnings(as.logical(get1(br, "with_easter", FALSE))))) {
+    paste0("with ", esc(.report_easter_label(br)))
+  } else {
+    "without Easter"
+  }
 
   score <- suppressWarnings(as.numeric(get1(br, "score_100", NA_real_)))
   if (!is.finite(score)) score <- .report_score_100(br)[1]
@@ -236,7 +253,7 @@ t_safe <- function(x) {
     htmltools::tags$p(
       htmltools::HTML(paste0(
         "<b>Selection rationale.</b> The chosen specification is <code>ARIMA ",
-        esc(arima_best), "</code> ", td_txt,
+        esc(arima_best), "</code> ", td_txt, " and ", easter_txt,
         ", selected because it achieved the <b>highest overall score (0-100; higher is better)</b>",
         if (is.finite(score)) paste0("; score = ", N(score, 1)) else "",
         if (is.finite(score_gap)) paste0("; margin vs. next best = ", N(score_gap, 1)) else "",
@@ -256,6 +273,8 @@ t_safe <- function(x) {
       htmltools::HTML(paste0(
         "Runner-up: <code>ARIMA ", esc(.report_arima(sr)), "</code> ",
         if (isTRUE(suppressWarnings(as.logical(get1(sr, "with_td", FALSE))))) paste0("with TD regressor ", esc(.report_td_label(sr))) else "without TD",
+        " and ",
+        if (isTRUE(suppressWarnings(as.logical(get1(sr, "with_easter", FALSE))))) paste0("with ", esc(.report_easter_label(sr))) else "without Easter",
         "."
       ))
     ) else NULL

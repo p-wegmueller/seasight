@@ -50,12 +50,19 @@ res_easter <- auto_seasonal_analysis(
   engine = "auto"
 )
 
-res_easter$table[1, c("model_label", "with_easter", "with_td", "td_name", "score_100")]
+res_easter$table[1, c(
+  "model_label", "with_easter", "easter_window", "with_td", "td_name",
+  "score_100"
+)]
 ```
 
-Use `include_easter = "always"` only when the effect is part of the production
-policy for that series. Use `include_easter = "off"` when Easter is known to be
-irrelevant or is handled elsewhere.
+In `"auto"` mode, X-13 tests whether Easter improves the model and selects
+among its supported Easter windows. The result columns report the effect
+actually retained, not merely the requested mode. Use `include_easter =
+"always"` only when the effect is part of the production policy for that
+series; this fixes `easter[easter_len]`. Use `include_easter = "off"` when
+Easter is known to be irrelevant or is handled elsewhere; this disables both
+inclusion and testing.
 
 ## Precomputed trading-day regressors
 
@@ -125,7 +132,10 @@ res_holiday <- auto_seasonal_analysis(
   engine = "auto"
 )
 
-res_holiday$table[1, c("model_label", "with_td", "td_name", "with_easter", "td_p", "score_100")]
+res_holiday$table[1, c(
+  "model_label", "with_td", "td_name", "with_easter", "easter_window",
+  "td_p", "score_100"
+)]
 ```
 
 For SEATS candidates with user regressors, X-13 needs future regressor values
@@ -152,4 +162,3 @@ sa_report_html(
 This makes the calendar decision auditable: a reviewer can see whether no
 calendar regressor was used, whether Easter was included, and which user-supplied
 holiday candidate won.
-

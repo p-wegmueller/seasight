@@ -68,12 +68,13 @@ print the copy-pasteable model code to the console and return it.}
 One of \code{"new"}, \code{"current"} or \code{"both"}.}
 
 \item{include_easter}{Controls inclusion of Easter regressors:
-\code{"auto"} (default) lets the selector decide, \code{"always"} always includes
-Easter, \code{"off"} never includes Easter. A logical value is also accepted
-and mapped to \code{"auto"}/\code{"off"}.}
+\code{"auto"} (default) asks X-13 to select among its supported Easter
+windows or reject Easter, \code{"always"} fixes \code{easter[easter_len]}, and
+\code{"off"} neither includes nor tests Easter. A logical value is also
+accepted and mapped to \code{"auto"}/\code{"off"}.}
 
-\item{easter_len}{Integer, length (in days) of the Easter effect when
-included.}
+\item{easter_len}{Integer, length (in days) of the Easter effect imposed by
+\code{include_easter = "always"}. It is ignored in \code{"auto"} and \code{"off"} modes.}
 
 \item{engine}{Preferred decomposition engine for candidate models.
 One of \code{"seats"}, \code{"x11"} or \code{"auto"}.}

@@ -289,6 +289,28 @@ NULL
   tibble::tibble(var = nm, p = as.numeric(p))
 }
 
+.easter_metadata <- function(m) {
+  if (!inherits(m, "seas")) {
+    return(list(with_easter = FALSE, easter_window = NA_integer_))
+  }
+
+  variables <- tryCatch(m$model$regression$variables, error = function(e) NULL)
+  if (is.null(variables)) {
+    variables <- tryCatch(names(stats::coef(m)), error = function(e) character())
+  }
+  variables <- as.character(variables %||% character())
+  easter <- grep("^easter\\s*\\[\\s*[0-9]+\\s*\\]$", variables,
+                 ignore.case = TRUE, value = TRUE)
+  if (!length(easter)) {
+    return(list(with_easter = FALSE, easter_window = NA_integer_))
+  }
+
+  window <- suppressWarnings(as.integer(sub(
+    ".*\\[\\s*([0-9]+)\\s*\\].*", "\\1", easter[[1]]
+  )))
+  list(with_easter = TRUE, easter_window = window)
+}
+
 # Fit one spec, returning 1-2 models (engine seats/x11/auto is respected)
 .fit_spec <- function(y, arima_model, transform_fun,
                       auto_outliers = TRUE,
@@ -312,16 +334,17 @@ NULL
   }
   freq <- stats::frequency(y)
   
-  # ---- regression.variables (Easter) ----------------------------------------
+  # ---- Easter specification -------------------------------------------------
   regvars <- character(0)
-  if (include_easter_mode %in% c("auto","always")) {
+  if (identical(include_easter_mode, "always")) {
     regvars <- sprintf("easter[%d]", as.integer(easter_len))
   }
+  regression_aictest <- if (identical(include_easter_mode, "auto")) "easter" else NULL
   
   call_args <- list(
     x = y,
     transform.function = transform_fun,
-    regression.aictest = NULL,
+    regression.aictest = regression_aictest,
     arima.model        = arima_model
   )
   
@@ -458,11 +481,13 @@ NULL
       }
     }
     
+    easter <- .easter_metadata(run1$model)
     out <- c(out, list(list(
       model       = run1$model,
       with_td     = td_used,
       td_name     = td_name %||% NA_character_,
-      with_easter = length(regvars) > 0,
+      with_easter = easter$with_easter,
+      easter_window = easter$easter_window,
       engine      = eng_try,
       err         = if (is.null(run1$model)) (last_err %||% "unknown error") else NA_character_
     )))

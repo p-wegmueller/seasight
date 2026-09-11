@@ -721,11 +721,12 @@ document.addEventListener('click', function(e){
 #' @param print_which Which code blocks to print when `print_to_console = TRUE`.
 #'   One of `"new"`, `"current"` or `"both"`.
 #' @param include_easter Controls inclusion of Easter regressors:
-#'   `"auto"` (default) lets the selector decide, `"always"` always includes
-#'   Easter, `"off"` never includes Easter. A logical value is also accepted
-#'   and mapped to `"auto"`/`"off"`.
-#' @param easter_len Integer, length (in days) of the Easter effect when
-#'   included.
+#'   `"auto"` (default) asks X-13 to select among its supported Easter
+#'   windows or reject Easter, `"always"` fixes `easter[easter_len]`, and
+#'   `"off"` neither includes nor tests Easter. A logical value is also
+#'   accepted and mapped to `"auto"`/`"off"`.
+#' @param easter_len Integer, length (in days) of the Easter effect imposed by
+#'   `include_easter = "always"`. It is ignored in `"auto"` and `"off"` modes.
 #' @param engine Preferred decomposition engine for candidate models.
 #'   One of `"seats"`, `"x11"` or `"auto"`.
 #' @param w_engine Numeric weight for the engine choice component in the

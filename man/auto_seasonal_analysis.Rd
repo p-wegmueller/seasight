@@ -69,12 +69,13 @@ be a time series aligned with \code{y}.}
 \code{xreg} is used (default \code{"td"}).}
 
 \item{include_easter}{Controls inclusion of Easter regressors:
-\code{"auto"} (default) lets the procedure decide, \code{"always"} always
-includes Easter, \code{"off"} never includes Easter. A logical value is
-also accepted and mapped to \code{"auto"}/\code{"off"}.}
+\code{"auto"} (default) asks X-13 to select among its supported Easter
+windows or reject Easter, \code{"always"} fixes \code{easter[easter_len]}, and
+\code{"off"} neither includes nor tests Easter. A logical value is also
+accepted and mapped to \code{"auto"}/\code{"off"}.}
 
-\item{easter_len}{Integer, length (in days) of the Easter effect when
-included.}
+\item{easter_len}{Integer, length (in days) of the Easter effect imposed by
+\code{include_easter = "always"}. It is ignored in \code{"auto"} and \code{"off"} modes.}
 
 \item{include_history_top_n}{Integer, number of top-ranked models for
 which revision metrics over the history are computed before the
@@ -135,7 +136,8 @@ for \code{outlier_critical}.}
 \value{
 An object of class \code{"auto_seasonal_analysis"} with components
 such as \code{best} (best \code{seas} model), \code{table} (diagnostic and ranking
-table), \code{specs_tried}, \code{frequency}, \code{transform}, \code{baseline}, and
+table, including actual Easter inclusion in \code{with_easter} and its selected
+window in \code{easter_window}), \code{specs_tried}, \code{frequency}, \code{transform}, \code{baseline}, and
 \code{seasonality}. When \code{current_model} is supplied, \code{baseline} includes its
 diagnostics and an indicator of whether its AICc is comparable with the
 selected candidate.

@@ -181,8 +181,17 @@ res_td <- auto_seasonal_analysis(
   engine = "auto"
 )
 
-res_td$table[1, c("model_label", "with_td", "td_name", "td_p", "score_100")]
+res_td$table[1, c(
+  "model_label", "with_td", "td_name", "with_easter", "easter_window",
+  "td_p", "score_100"
+)]
 ```
+
+With `include_easter = "auto"`, X-13 tests whether Easter improves the model
+and selects among its supported Easter windows. Use `"always"` to impose
+`easter[easter_len]`, or `"off"` to disable both inclusion and testing. The
+candidate table records the effect actually retained in `with_easter` and
+`easter_window`.
 
 For moving-holiday pulses, use `build_user_xreg()`:
 
