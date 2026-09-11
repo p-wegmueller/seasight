@@ -80,6 +80,32 @@ Key differences compared to the “no baseline” case:
   correlation of seasonal factors).
 * The decision helper `sa_should_switch()` becomes meaningful.
 
+When the purpose is to attribute an AICc difference specifically to ARIMA
+orders, hold the incumbent's selected transformation and regressors fixed:
+
+```{r incumbent-fixed, eval = FALSE}
+res_fixed <- auto_seasonal_analysis(
+  y               = x,
+  current_model   = m_current,
+  comparison_mode = "incumbent_fixed",
+  use_fivebest    = FALSE,
+  max_specs       = 3,
+  engine          = "x11"
+)
+
+res_fixed$table[, c(
+  "arima", "comparison_mode", "regression_variables", "outlier_variables",
+  "AICc"
+)]
+res_fixed$regressor_comparison
+```
+
+This mode re-estimates regression coefficients but does not reselect
+regressors or outliers. It requires the incumbent to contain any user-regressor
+data it used; unresolved data produce an error rather than an unrestricted
+fallback. Use the default `"full_search"` mode for discovery, where regressor
+and outlier choices may vary with each candidate.
+
 ### 1.1 Visual comparison
 
 You can use the full HTML report:

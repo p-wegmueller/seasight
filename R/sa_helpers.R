@@ -311,6 +311,149 @@ NULL
   list(with_easter = TRUE, easter_window = window)
 }
 
+.regression_metadata <- function(m) {
+  regression <- if (inherits(m, "seas")) {
+    tryCatch(m$model$regression, error = function(e) NULL)
+  } else {
+    NULL
+  }
+  variables <- as.character(regression$variables %||% character())
+  user_variables <- as.character(regression$user %||% character())
+  effective <- unique(c(variables, user_variables))
+  outliers <- grep("^(ao|ls|tc)[0-9]", effective,
+                   ignore.case = TRUE, value = TRUE)
+  list(
+    variables = variables,
+    user_variables = user_variables,
+    effective_variables = effective,
+    outliers = outliers
+  )
+}
+
+.collapse_regression_terms <- function(x) {
+  x <- as.character(x %||% character())
+  if (length(x)) paste(x, collapse = ", ") else "none"
+}
+
+.compare_regression_sets <- function(candidate, incumbent = NULL,
+                                     comparison_mode = "full_search") {
+  candidate_terms <- .regression_metadata(candidate)$effective_variables
+  incumbent_terms <- .regression_metadata(incumbent)$effective_variables
+  added <- setdiff(candidate_terms, incumbent_terms)
+  removed <- setdiff(incumbent_terms, candidate_terms)
+  unchanged <- setequal(candidate_terms, incumbent_terms)
+
+  summary <- if (!inherits(incumbent, "seas")) {
+    "No fitted incumbent was supplied; regressor differences are unavailable."
+  } else if (unchanged) {
+    paste0("Regressors unchanged: ", .collapse_regression_terms(candidate_terms), ".")
+  } else {
+    paste0(
+      "Added: ", .collapse_regression_terms(added),
+      "; removed: ", .collapse_regression_terms(removed), "."
+    )
+  }
+
+  list(
+    comparison_mode = comparison_mode,
+    incumbent = incumbent_terms,
+    candidate = candidate_terms,
+    added = added,
+    removed = removed,
+    unchanged = unchanged,
+    summary = summary
+  )
+}
+
+.incumbent_fixed_spec <- function(current_model, y) {
+  if (!inherits(current_model, "seas")) {
+    stop(
+      "`comparison_mode = \"incumbent_fixed\"` requires `current_model` to be a fitted `seasonal::seas` object.",
+      call. = FALSE
+    )
+  }
+
+  incumbent_y <- tryCatch(seasonal::original(current_model), error = function(e) NULL)
+  if (is.null(incumbent_y) || !.same_ts_values(incumbent_y, y)) {
+    stop(
+      "`current_model` must have been fitted to the same time series supplied as `y` for an incumbent-fixed comparison.",
+      call. = FALSE
+    )
+  }
+
+  static_call <- tryCatch(
+    seasonal::static(current_model, coef = FALSE, test = FALSE, evaluate = FALSE),
+    error = function(e) NULL
+  )
+  static_args <- if (is.call(static_call)) as.list(static_call) else list()
+  transform <- static_args[["transform.function"]]
+  if (!is.character(transform) || length(transform) != 1L || !nzchar(transform)) {
+    stop(
+      "Could not resolve the incumbent's selected transformation for an incumbent-fixed comparison.",
+      call. = FALSE
+    )
+  }
+
+  metadata <- .regression_metadata(current_model)
+  model_regression <- tryCatch(current_model$model$regression, error = function(e) NULL)
+  xreg <- NULL
+  usertype <- character()
+  if (length(metadata$user_variables)) {
+    xreg <- tryCatch(current_model$list$xreg, error = function(e) NULL)
+    xreg <- tryCatch(tsbox::ts_ts(xreg), error = function(e) NULL)
+    if (is.null(xreg) || !inherits(xreg, "ts")) {
+      stop(
+        "The incumbent uses user regressors, but their stored data could not be resolved. Refit `current_model` with an explicit `xreg` object before using `comparison_mode = \"incumbent_fixed\"`.",
+        call. = FALSE
+      )
+    }
+    xreg_time <- as.numeric(stats::time(xreg))
+    y_time <- as.numeric(stats::time(y))
+    xreg_covers_y <- min(xreg_time) <= min(y_time) + 1e-8 &&
+      max(xreg_time) >= max(y_time) - 1e-8
+    if (stats::frequency(xreg) != stats::frequency(y) || !xreg_covers_y ||
+        NROW(xreg) < length(y) || NCOL(xreg) != length(metadata$user_variables)) {
+      stop(
+        "The incumbent's stored user regressors do not match `y` or the fitted user-regressor set; refit the incumbent with aligned `xreg` data.",
+        call. = FALSE
+      )
+    }
+    usertype <- as.character(
+      model_regression$usertype %||% current_model$list$regression.usertype %||% "user"
+    )
+    if (!length(usertype) || !(length(usertype) %in% c(1L, NCOL(xreg)))) {
+      stop(
+        "The incumbent's stored `regression.usertype` does not match its user regressors; refit the incumbent with explicit user types.",
+        call. = FALSE
+      )
+    }
+  }
+
+  extra_args <- list()
+  incumbent_args <- current_model$list %||% list()
+  keep <- grep("^(transform|regression|forecast)\\.", names(incumbent_args), value = TRUE)
+  drop <- c(
+    "transform.function", "regression.variables", "regression.usertype",
+    "regression.aictest", "regression.b", "regression.fix"
+  )
+  keep <- setdiff(keep, drop)
+  if (length(keep)) extra_args <- incumbent_args[keep]
+
+  has_td <- any(grepl("^(td|td1coef|stocktd|lom|lpyear)",
+                      metadata$effective_variables, ignore.case = TRUE)) ||
+    any(grepl("^(td|trading)", usertype, ignore.case = TRUE))
+
+  list(
+    transform = transform,
+    variables = metadata$variables,
+    user_variables = metadata$user_variables,
+    xreg = xreg,
+    usertype = usertype,
+    with_td = has_td,
+    extra_args = extra_args
+  )
+}
+
 # Fit one spec, returning 1-2 models (engine seats/x11/auto is respected)
 .fit_spec <- function(y, arima_model, transform_fun,
                       auto_outliers = TRUE,
@@ -322,7 +465,8 @@ NULL
                       outlier_types    = c("AO","LS","TC"),
                       outlier_method   = "AddOne",
                       outlier_critical = 4,
-                      engine = c("seats","x11","auto")) {
+                      engine = c("seats","x11","auto"),
+                      fixed_regression = NULL) {
   
   include_easter_mode <- match.arg(include_easter_mode)
   engine <- match.arg(engine)
@@ -333,13 +477,17 @@ NULL
     stop("`.fit_spec()` requires `y` to be convertible to a base `ts`.")
   }
   freq <- stats::frequency(y)
+  fixed_mode <- !is.null(fixed_regression)
   
   # ---- Easter specification -------------------------------------------------
   regvars <- character(0)
-  if (identical(include_easter_mode, "always")) {
+  if (fixed_mode) {
+    regvars <- as.character(fixed_regression$variables %||% character())
+    transform_fun <- fixed_regression$transform
+  } else if (identical(include_easter_mode, "always")) {
     regvars <- sprintf("easter[%d]", as.integer(easter_len))
   }
-  regression_aictest <- if (identical(include_easter_mode, "auto")) "easter" else NULL
+  regression_aictest <- if (!fixed_mode && identical(include_easter_mode, "auto")) "easter" else NULL
   
   call_args <- list(
     x = y,
@@ -360,7 +508,11 @@ NULL
   
   # ---- user xreg: align to y and build mts ----------------------------------
   td_used <- FALSE
-  if (!is.null(td_xreg)) {
+  if (fixed_mode && !is.null(fixed_regression$xreg)) {
+    call_args$xreg <- fixed_regression$xreg
+    call_args$regression.usertype <- fixed_regression$usertype
+    td_used <- isTRUE(fixed_regression$with_td)
+  } else if (!fixed_mode && !is.null(td_xreg)) {
     xr <- sa_align_regressor(y, td_xreg)
 
     if (is.null(xr)) {
@@ -379,11 +531,17 @@ NULL
   }
   
   # ---- outliers --------------------------------------------------------------
-  if (isTRUE(auto_outliers)) {
+  if (!fixed_mode && isTRUE(auto_outliers)) {
     call_args$outlier          <- ""
     call_args$outlier.types    <- outlier_types
     call_args$outlier.method   <- outlier_method
     call_args$outlier.critical <- outlier_critical
+  }
+  if (fixed_mode) {
+    call_args$outlier <- NULL
+    if (length(fixed_regression$extra_args)) {
+      call_args[names(fixed_regression$extra_args)] <- fixed_regression$extra_args
+    }
   }
   
   # ---- helper: run seas safely ----------------------------------------------
@@ -449,7 +607,7 @@ NULL
     last_err <- NULL
     
     # only pad when attempting SEATS (not X11)
-    if (td_used && identical(eng_try, "seats")) {
+    if (!fixed_mode && td_used && identical(eng_try, "seats")) {
       lead_n <- as.integer(3L * freq)
       args1$xreg <- .extend_xreg_for_seats(args1$xreg, lead_n = lead_n, usertype = td_usertype)
       args1$forecast.maxlead <- lead_n
@@ -460,9 +618,28 @@ NULL
     if (is.null(run1$model)) {
       last_err <- run1$error
     }
+
+    if (fixed_mode && inherits(run1$model, "seas")) {
+      expected <- unique(c(
+        fixed_regression$variables %||% character(),
+        fixed_regression$user_variables %||% character()
+      ))
+      actual <- .regression_metadata(run1$model)$effective_variables
+      if (!setequal(expected, actual)) {
+        run1 <- list(
+          model = NULL,
+          error = paste0(
+            "The fitted candidate did not retain the incumbent regressor set. ",
+            "Expected: ", .collapse_regression_terms(expected), "; actual: ",
+            .collapse_regression_terms(actual), "."
+          )
+        )
+        last_err <- run1$error
+      }
+    }
     
     # Fallback 1: drop usertype tokens (some X-13 builds are picky)
-    if (is.null(run1$model) && td_used) {
+    if (is.null(run1$model) && td_used && !fixed_mode) {
       alt1 <- args1
       alt1$regression.usertype <- NULL
       run1 <- .run_try(alt1)
@@ -472,7 +649,7 @@ NULL
     }
     
     # Fallback 2: conservative token "td"
-    if (is.null(run1$model) && td_used) {
+    if (is.null(run1$model) && td_used && !fixed_mode) {
       alt2 <- args1
       alt2$regression.usertype <- rep("td", ncol(args1$xreg %||% matrix(NA_real_, 0, 1)))
       run1 <- .run_try(alt2)

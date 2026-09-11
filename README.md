@@ -129,6 +129,13 @@ sa_report_html(
 )
 ```
 
+For an ARIMA-only attribution check, set `comparison_mode =
+"incumbent_fixed"`. This requires `current_model` and holds its selected
+transformation, calendar terms, fixed outliers and stored user regressors
+constant while candidate ARIMA specifications (and the requested engine) are
+refitted. Coefficients remain free. The candidate table records
+`comparison_mode`, `regression_variables` and `outlier_variables`.
+
 ## Decision Logic In Brief
 
 `auto_seasonal_analysis()` may fit several X-13 models: default specifications,

@@ -56,7 +56,8 @@ sa_issue_report_html <- function(
     outlier_types    = c("AO","LS","TC"),
     outlier_method   = "AddOne",
     outlier_critical = 4,
-    outlier_alpha    = NULL
+    outlier_alpha    = NULL,
+    comparison_mode = c("full_search", "incumbent_fixed")
 ){
   # ---------- small helpers -------------------------------------------------
 
@@ -144,6 +145,7 @@ sa_issue_report_html <- function(
   print_which    <- match.arg(print_which)
   include_easter <- if (is.logical(include_easter)) { if (include_easter) "auto" else "off" } else { match.arg(include_easter) }
   engine         <- match.arg(engine)
+  comparison_mode <- match.arg(comparison_mode)
   
   if (!is.null(file)) outfile <- file
   
@@ -167,6 +169,7 @@ sa_issue_report_html <- function(
       td_usertype = td_usertype,
       td_candidates = td_candidates,
       current_model = current_model,
+      comparison_mode = comparison_mode,
       include_history_top_n = 10,
       outlier_types    = outlier_types,
       outlier_method   = outlier_method,
@@ -700,6 +703,10 @@ document.addEventListener('click', function(e){
 #'   `tsbox::ts_ts()` can convert to `ts`.
 #' @param current_model Optional incumbent [seasonal::seas()] model to compare
 #'   against the newly selected specification.
+#' @param comparison_mode Comparison design passed to
+#'   [auto_seasonal_analysis()]. `"full_search"` lets candidates select their
+#'   own regressors and outliers; `"incumbent_fixed"` retains the incumbent's
+#'   transformation and regression variables while varying ARIMA and engine.
 #' @param td_usertype Character string passed as `regression.usertype` when
 #'   trading-day regressors are used (default `"td"`).
 #' @param td_candidates Optional named list of trading-day candidate regressors
@@ -775,12 +782,14 @@ sa_report_html <- function(
     outlier_types    = c("AO","LS","TC"),
     outlier_method   = "AddOne",
     outlier_critical = 4,
-    outlier_alpha    = NULL
+    outlier_alpha    = NULL,
+    comparison_mode = c("full_search", "incumbent_fixed")
 ) {
   if (!is.null(file)) outfile <- file
   sa_issue_report_html(
     y = y,
     current_model = current_model,
+    comparison_mode = match.arg(comparison_mode),
     td_usertype   = td_usertype,
     td_candidates = td_candidates,
     use_fivebest  = use_fivebest,

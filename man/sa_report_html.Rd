@@ -26,7 +26,8 @@ sa_report_html(
   outlier_types = c("AO", "LS", "TC"),
   outlier_method = "AddOne",
   outlier_critical = 4,
-  outlier_alpha = NULL
+  outlier_alpha = NULL,
+  comparison_mode = c("full_search", "incumbent_fixed")
 )
 }
 \arguments{
@@ -93,6 +94,11 @@ passed to \code{seasonal::seas()} (e.g. \code{"AddOne"}).}
 
 \item{outlier_alpha}{Optional numeric significance level; if supplied, it is
 converted to a two-sided normal cutoff for \code{outlier_critical}.}
+
+\item{comparison_mode}{Comparison design passed to
+\code{\link[=auto_seasonal_analysis]{auto_seasonal_analysis()}}. \code{"full_search"} lets candidates select their
+own regressors and outliers; \code{"incumbent_fixed"} retains the incumbent's
+transformation and regression variables while varying ARIMA and engine.}
 }
 \value{
 Invisibly, a list with elements \code{report} (path to the HTML file) and

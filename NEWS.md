@@ -2,6 +2,10 @@
 
 ## Submission-readiness update
 
+- Add `comparison_mode = "incumbent_fixed"` for ARIMA comparisons that retain
+  the incumbent transformation, fixed outliers, calendar terms and stored user
+  regressors. Candidate metadata and reports identify the comparison design and
+  regressor differences.
 - Fix `include_easter = "auto"` so X-13 tests and selects the Easter effect
   instead of always imposing `easter[15]`. Candidate metadata and HTML reports
   now show the Easter window actually retained by the fitted model.

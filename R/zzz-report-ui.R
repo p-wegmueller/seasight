@@ -207,6 +207,23 @@ t_safe <- function(x) {
   } else {
     "without Easter"
   }
+  comparison_mode <- as.character(
+    res$comparison_mode %||% get1(br, "comparison_mode", "full_search")
+  )[[1]]
+  regressor_summary <- res$regressor_comparison$summary %||%
+    "Regressor differences relative to the incumbent are unavailable."
+  comparison_text <- if (identical(comparison_mode, "incumbent_fixed")) {
+    paste0(
+      "AICc differences use an incumbent-fixed comparison: the incumbent ",
+      "transformation and regressors are retained, and only ARIMA and the ",
+      "requested decomposition engine vary. ", regressor_summary
+    )
+  } else {
+    paste0(
+      "AICc differences use a full-search comparison and may therefore also ",
+      "reflect different regressors or outliers. ", regressor_summary
+    )
+  }
 
   score <- suppressWarnings(as.numeric(get1(br, "score_100", NA_real_)))
   if (!is.finite(score)) score <- .report_score_100(br)[1]
@@ -247,6 +264,11 @@ t_safe <- function(x) {
   seas_amp <- get1(br, "seasonal_amp_pct")
 
   htmltools::tagList(
+    htmltools::tags$p(
+      htmltools::HTML(paste0(
+        "<b>Comparison mode.</b> ", esc(comparison_text)
+      ))
+    ),
     if (!is.na(gate_reason) && nzchar(gate_reason)) htmltools::tags$p(
       htmltools::HTML(paste0("<b>Decision gate.</b> ", esc(switch_decision), ": ", esc(gate_reason)))
     ) else NULL,

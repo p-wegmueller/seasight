@@ -32,7 +32,8 @@ auto_seasonal_analysis(
   outlier_types = c("AO", "LS", "TC"),
   outlier_method = "AddOne",
   outlier_critical = 4,
-  outlier_alpha = NULL
+  outlier_alpha = NULL,
+  comparison_mode = c("full_search", "incumbent_fixed")
 )
 }
 \arguments{
@@ -132,6 +133,13 @@ method (passed to \code{seasonal::seas()}, e.g. \code{"AddOne"}).}
 \item{outlier_alpha}{Optional numeric significance level for outlier
 detection. If supplied, it is converted to a two-sided normal cutoff
 for \code{outlier_critical}.}
+
+\item{comparison_mode}{Comparison design. \code{"full_search"} (default) lets
+every candidate select its own regressors and outliers.
+\code{"incumbent_fixed"} requires \code{current_model}, retains its selected
+transformation and effective regression variables, and varies only the
+requested ARIMA specification and decomposition engine. Stored user
+regressors must be available in the incumbent model.}
 }
 \value{
 An object of class \code{"auto_seasonal_analysis"} with components
@@ -140,7 +148,8 @@ table, including actual Easter inclusion in \code{with_easter} and its selected
 window in \code{easter_window}), \code{specs_tried}, \code{frequency}, \code{transform}, \code{baseline}, and
 \code{seasonality}. When \code{current_model} is supplied, \code{baseline} includes its
 diagnostics and an indicator of whether its AICc is comparable with the
-selected candidate.
+selected candidate. \code{comparison_mode} and \code{regressor_comparison} describe
+whether candidate AICc differences hold the incumbent regressors fixed.
 }
 \description{
 Runs a grid of X-13ARIMA-SEATS specifications, computes diagnostics
