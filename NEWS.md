@@ -2,6 +2,9 @@
 
 ## Submission-readiness update
 
+- Surface SEATS model substitutions in the report summary and engine-choice
+  card. The candidates table now records a stable switch indicator alongside
+  the requested and operative model specifications.
 - Add `comparison_mode = "incumbent_fixed"` for ARIMA comparisons that retain
   the incumbent transformation, fixed outliers, calendar terms and stored user
   regressors. Candidate metadata and reports identify the comparison design and

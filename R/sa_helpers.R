@@ -181,6 +181,31 @@ NULL
   if (all(is.finite(y)) && min(y, na.rm = TRUE) > 0) "log" else "none"
 }
 
+.seats_switch_state <- function(x) {
+  if (is.null(x) || !length(x)) return(NA)
+  x <- x[[1]]
+  if (is.logical(x)) return(if (is.na(x)) NA else x)
+  if (is.numeric(x)) {
+    if (is.na(x)) return(NA)
+    if (x == 1) return(TRUE)
+    if (x == 0) return(FALSE)
+  }
+  value <- tolower(trimws(as.character(x)))
+  if (value %in% c("yes", "true", "1")) return(TRUE)
+  if (value %in% c("no", "false", "0")) return(FALSE)
+  NA
+}
+
+.seats_model_used <- function(m) {
+  model <- tryCatch(
+    seasonal::udg(m, "seatsmdl", fail = FALSE),
+    error = function(e) NULL
+  )
+  if (is.null(model) || !length(model)) return(NA_character_)
+  model <- trimws(as.character(model[[1]]))
+  if (!length(model) || is.na(model) || !nzchar(model)) NA_character_ else model
+}
+
 .has_seats_model_switch_msg <- function(m) {
   # Robust and summary()-free: infer from UDG keys if present.
   u <- tryCatch(seasonal::udg(m), error = function(e) NULL)
@@ -191,12 +216,7 @@ NULL
   key_idx <- grep("seats.*(model|mdl).*(switch|chang|diff)|model.*seats.*(switch|chang|diff)", nms)
   if (!length(key_idx)) return(NA)
   
-  v <- u[[key_idx[1]]]
-  if (is.logical(v) && length(v) == 1L) return(v)
-  vv <- tolower(as.character(v)[1])
-  if (vv %in% c("yes", "true", "1")) return(TRUE)
-  if (vv %in% c("no", "false", "0")) return(FALSE)
-  NA
+  .seats_switch_state(u[[key_idx[1]]])
 }
 
 # QS on the ORIGINAL series, tested with both engines

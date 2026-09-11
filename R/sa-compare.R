@@ -454,6 +454,65 @@ sa_existence_card <- function(res) .build_existence_card(res)
 #' @export
 sa_engine_choice_card <- function(res) .build_engine_choice_card(res)
 
+.seats_switch_details <- function(res) {
+  br <- dplyr::slice(res$table, 1)
+  flag <- if ("SEATS_model_switch" %in% names(br)) {
+    .seats_switch_state(br$SEATS_model_switch)
+  } else {
+    NA
+  }
+  requested <- tryCatch(.coalesce_arima_str(br), error = function(e) NA_character_)
+  operative <- if ("SEATS_operative_model" %in% names(br)) {
+    as.character(br$SEATS_operative_model[[1]])
+  } else {
+    NA_character_
+  }
+  if (!length(operative) || is.na(operative[[1]]) || !nzchar(operative[[1]])) {
+    operative <- .seats_model_used(res$best)
+  }
+  engine <- if ("engine" %in% names(br)) {
+    as.character(br$engine[[1]])
+  } else {
+    tryCatch(.engine_used(res$best), error = function(e) "unknown")
+  }
+  clean <- function(x) {
+    x <- as.character(x %||% NA_character_)
+    if (!length(x)) return("n/a")
+    x <- x[[1]]
+    if (is.na(x) || !nzchar(trimws(x))) "n/a" else trimws(x)
+  }
+  list(
+    flag = flag,
+    engine = tolower(clean(engine)),
+    requested = clean(requested),
+    operative = clean(operative)
+  )
+}
+
+.seats_switch_warning_tag <- function(res, location = c("engine", "summary")) {
+  location <- match.arg(location)
+  details <- .seats_switch_details(res)
+  if (!isTRUE(details$flag)) return(NULL)
+
+  context <- if (identical(details$engine, "seats")) {
+    "The selected SEATS decomposition uses a substituted model."
+  } else {
+    "X-13 reported a model substitution for the SEATS alternative."
+  }
+  tag <- if (identical(location, "summary")) htmltools::tags$div else htmltools::tags$li
+  tag(
+    class = "seats-switch-warning",
+    style = paste(
+      "margin:10px 0; padding:10px 12px; border:1px solid #f59e0b;",
+      "border-radius:8px; background:#fffbeb; color:#92400e;"
+    ),
+    htmltools::tags$strong("SEATS model-switch warning: "),
+    context,
+    " Requested ARIMA: ", htmltools::tags$code(details$requested),
+    "; operative SEATS model: ", htmltools::tags$code(details$operative), "."
+  )
+}
+
 .build_engine_choice_card <- function(res) {
   stopifnot(inherits(res, "auto_seasonal_analysis"))
   br  <- dplyr::slice(res$table, 1)
@@ -471,9 +530,9 @@ sa_engine_choice_card <- function(res) .build_engine_choice_card(res)
   p_seats_ori <- dplyr::coalesce(br$QSori_p_seats, NA_real_)
   
   # SEATS flags
-  has_switch   <- isTRUE(br$SEATS_model_switch)
   has_seas     <- br$SEATS_has_seasonal
   has_seas_txt <- if (isTRUE(has_seas)) "present" else if (identical(has_seas, FALSE)) "absent" else "n/a"
+  switch_warning <- .seats_switch_warning_tag(res, location = "engine")
   
   lead <- htmltools::HTML(
     paste0("<b>Decomposition engine selected:</b> ",
@@ -492,9 +551,7 @@ sa_engine_choice_card <- function(res) .build_engine_choice_card(res)
         paste0("<b>QS on original (existence):</b> X-11 p = ", fmtP(p_x11_ori),
                ", SEATS p = ", fmtP(p_seats_ori), ".")
       )),
-      if (isTRUE(has_switch)) htmltools::tags$li(
-        htmltools::HTML("<b>SEATS model-switch warning:</b> detected; this can undermine SEATS diagnostics.")
-      ),
+      switch_warning,
       if (identical(has_seas, FALSE)) htmltools::tags$li(
         htmltools::HTML("<b>SEATS seasonal component:</b> absent; X-11 provides a stable seasonal factor.")
       )
@@ -514,7 +571,8 @@ sa_engine_choice_card <- function(res) .build_engine_choice_card(res)
       )),
       htmltools::tags$li(htmltools::HTML(
         paste0("<b>SEATS seasonal component:</b> ", has_seas_txt, ".")
-      ))
+      )),
+      switch_warning
     )
     nuance <- "SEATS is the default choice; switching to X-11 only occurs if there are clear advantages (residual QS) or stability-related warnings."
   }

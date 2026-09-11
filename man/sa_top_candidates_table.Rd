@@ -26,7 +26,9 @@ model} (if supplied) even if it is not in the top \code{n}. The airline
 reference model ARIMA (0 1 1)(0 1 1) is also appended if absent.
 }
 \details{
-Rows are lightly shaded: best (green), current (blue), airline (red).
+Rows are lightly shaded: best (green), current (blue), airline (red). The
+table reports the requested ARIMA, the operative SEATS model when available,
+and a stable \code{yes}/\code{no}/\code{n/a} SEATS-switch indicator.
 }
 \examples{
 \donttest{

@@ -117,6 +117,8 @@ Notes:
 \itemize{
 \item If the provided \emph{current} specification equals the selected \emph{best} model,
 the report omits the "Alternative model" comparison section.
+\item A reported SEATS model substitution is highlighted in both the summary
+and engine-choice cards, with requested and operative models when known.
 \item The "Top candidates" table starts with the best model and always includes
 the current model (flagged as current) when one is supplied.
 }

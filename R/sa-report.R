@@ -189,6 +189,7 @@ sa_issue_report_html <- function(
   best_has_td  <- isTRUE(best_r$with_td)
   best_td_name <- if (best_has_td) (best_r$td_name %||% NULL) else NULL
   best_td_label <- if (best_has_td) (best_r$td_label %||% best_r$td_name %||% NULL) else NULL
+  summary_switch_warning <- .seats_switch_warning_tag(res, location = "summary")
   
   # Try to recover the incumbent id robustly from result structure
   incumbent_spec_id <- res$incumbent_spec_id %||% res$current_spec_id %||% {
@@ -539,6 +540,7 @@ document.addEventListener('click', function(e){
                                           .build_existence_card(res),
                                           htmltools::div(class="card",
                                                          htmltools::tags$h2("Summary"),
+                                                         summary_switch_warning,
                                                          htmltools::div(class="kv",
                                                                         htmltools::div(htmltools::HTML(paste0("<b>Seasonality (robust)</b>: <span class='pill'>", ui_exist$call, "</span>"))),
                                                                         if (!is.null(ui_exist$note)) htmltools::div(htmltools::HTML(paste0("<b>Note</b>: ", htmltools::htmlEscape(ui_exist$note)))),
@@ -696,6 +698,8 @@ document.addEventListener('click', function(e){
 #' Notes:
 #' - If the provided *current* specification equals the selected *best* model,
 #'   the report omits the "Alternative model" comparison section.
+#' - A reported SEATS model substitution is highlighted in both the summary
+#'   and engine-choice cards, with requested and operative models when known.
 #' - The "Top candidates" table starts with the best model and always includes
 #'   the current model (flagged as current) when one is supplied.
 #'
@@ -820,7 +824,9 @@ sa_report_html <- function(
 #' model** (if supplied) even if it is not in the top `n`. The airline
 #' reference model ARIMA (0 1 1)(0 1 1) is also appended if absent.
 #'
-#' Rows are lightly shaded: best (green), current (blue), airline (red).
+#' Rows are lightly shaded: best (green), current (blue), airline (red). The
+#' table reports the requested ARIMA, the operative SEATS model when available,
+#' and a stable `yes`/`no`/`n/a` SEATS-switch indicator.
 #'
 #' @param res Result of [auto_seasonal_analysis()].
 #' @param current_model Optional fitted [seasonal::seas] model to mark as "current".

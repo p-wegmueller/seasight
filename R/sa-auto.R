@@ -107,7 +107,9 @@ NULL
 #' @return An object of class `"auto_seasonal_analysis"` with components
 #'   such as `best` (best `seas` model), `table` (diagnostic and ranking
 #'   table, including actual Easter inclusion in `with_easter` and its selected
-#'   window in `easter_window`), `specs_tried`, `frequency`, `transform`, `baseline`, and
+#'   window in `easter_window`, plus SEATS substitution metadata in
+#'   `SEATS_model_switch` and `SEATS_operative_model`), `specs_tried`,
+#'   `frequency`, `transform`, `baseline`, and
 #'   `seasonality`. When `current_model` is supplied, `baseline` includes its
 #'   diagnostics and an indicator of whether its AICc is comparable with the
 #'   selected candidate. `comparison_mode` and `regressor_comparison` describe
@@ -265,6 +267,7 @@ auto_seasonal_analysis <- function(y,
       IDS = NA_character_,
       LB_p = NA_real_,
       SEATS_model_switch = NA,
+      SEATS_operative_model = NA_character_,
       SEATS_has_seasonal = NA,
       QS_p_x11 = NA_real_,
       QS_p_seats = NA_real_,
@@ -495,6 +498,7 @@ auto_seasonal_analysis <- function(y,
       IDS         = tryCatch(.ids_flag(m), error = function(e) NA_character_),
       LB_p        = tryCatch(.lb_p(m), error = function(e) NA_real_),
       SEATS_model_switch = .has_seats_model_switch_msg(m),
+      SEATS_operative_model = .seats_model_used(m),
       SEATS_has_seasonal = .seats_has_seasonal(m)
     ) |>
       dplyr::bind_cols(.qs_on_sa_both(m)) |>

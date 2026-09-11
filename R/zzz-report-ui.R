@@ -45,6 +45,11 @@ t_safe <- function(x) {
   if (is.finite(window)) paste0("easter[", window, "]") else "included"
 }
 
+.report_seats_switch_label <- function(row) {
+  state <- .seats_switch_state(.report_get(row, "SEATS_model_switch", NA))
+  if (isTRUE(state)) "yes" else if (identical(state, FALSE)) "no" else "n/a"
+}
+
 .report_arima <- function(row) {
   out <- tryCatch(.coalesce_arima_str(row), error = function(e) NA_character_)
   if (is.character(out) && length(out) == 1L && !is.na(out) && nzchar(out)) return(out)
@@ -71,7 +76,8 @@ t_safe <- function(x) {
   n_ranked <- min(as.integer(n), n_total)
 
   disp_cols <- c(
-    "model_label", "arima", "with_td", "td_name", "td_label", "with_easter",
+    "model_label", "arima", "SEATS_operative_model", "SEATS_model_switch",
+    "with_td", "td_name", "td_label", "with_easter",
     "easter_window", "score_100",
     "AICc", "LB_p", "QSori_p", "QS_p_x11", "QS_p_seats", "QS_p",
     "td_p", "vola_reduction_pct", "seasonal_amp_pct", "dist_sa_L1", "rev_mae"
@@ -99,6 +105,8 @@ t_safe <- function(x) {
       prev_row <- tibble::tibble(
         model_label = "current",
         arima = .report_norm(prev_arima),
+        SEATS_operative_model = .seats_model_used(current_model),
+        SEATS_model_switch = .has_seats_model_switch_msg(current_model),
         with_td = FALSE,
         td_name = NA_character_,
         td_label = NA_character_,
@@ -125,7 +133,8 @@ t_safe <- function(x) {
   top$is_airline <- .report_norm(top$arima) == .report_norm(airline_arima)
 
   header <- htmltools::tags$tr(lapply(
-    c("Label", "ARIMA", "Score (0-100)", "TD regressor", "Easter", "AICc", "LB p", "QSori p",
+    c("Label", "Requested ARIMA", "Operative SEATS model", "SEATS switch",
+      "Score (0-100)", "TD regressor", "Easter", "AICc", "LB p", "QSori p",
       "QS X-11 p", "QS SEATS p", "QS min", "TD p", "Volatility red. %",
       "Seasonal amp %", "L1 vs prev SA", "Rev. MAE"),
     htmltools::tags$th
@@ -138,6 +147,11 @@ t_safe <- function(x) {
       class = row_class,
       htmltools::tags$td(esc(.report_chr(.report_get(r, "model_label", "")))),
       htmltools::tags$td(htmltools::tags$span(class = "model-spec", esc(.report_arima(r)))),
+      htmltools::tags$td(htmltools::tags$span(
+        class = "model-spec",
+        esc(.report_chr(.report_get(r, "SEATS_operative_model", "n/a"), "n/a"))
+      )),
+      htmltools::tags$td(esc(.report_seats_switch_label(r))),
       htmltools::tags$td(.report_num(.report_get(r, "score_100"), 1)),
       htmltools::tags$td(esc(.report_td_label(r))),
       htmltools::tags$td(esc(.report_easter_label(r))),
