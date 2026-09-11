@@ -140,10 +140,13 @@ when you need a broader review.
 Model ranking combines residual seasonality on the adjusted series (`QS_p`),
 Ljung-Box residual diagnostics, AICc, revision metrics for the top candidates,
 distance from any incumbent model, and an engine-preference penalty. The
-switching helper `sa_should_switch()` is deliberately narrower: it checks the
-best row against configurable thresholds for QS, Ljung-Box, distance to the
-incumbent and seasonal-component correlation, returning either
-`"CHANGE_TO_NEW_MODEL"` or `"KEEP_CURRENT_MODEL"`.
+switching helper `sa_should_switch()` then compares the selected candidate with
+the incumbent. A change requires a material improvement in comparable AICc,
+acceptable absolute diagnostics, no material deterioration in QS or
+Ljung-Box p-values, and compliance with distance and seasonal-correlation
+safeguards. Identical adjustments are kept. Missing or non-comparable evidence
+is reported as `"REVIEW_REQUIRED"`; without an incumbent the result is
+`"NO_BASELINE"`.
 
 `sa_report_html()` writes an HTML file. In examples, use `tempfile()` or an
 explicit review-output path so report generation does not unexpectedly create

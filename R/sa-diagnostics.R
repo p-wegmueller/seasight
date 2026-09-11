@@ -313,7 +313,8 @@ sa_is_do_not_adjust <- function(row) {
 #' @param res Result from `auto_seasonal_analysis()`.
 #' @param current_model A fitted `seas` object to compare against.
 #' @return A list of class `"seasight_sa_compare"` with elements:
-#'   `decision`, `summary`, `series`, `diagnostics`, and `table`.
+#'   `decision`, `summary`, `series`, `diagnostics`, and `table`. The decision
+#'   uses the incumbent-relative rule documented in [sa_should_switch()].
 #'
 #' @examples
 #' \donttest{
@@ -422,7 +423,7 @@ sa_compare <- function(res, current_model) {
 
   structure(
     list(
-      decision = sa_should_switch(res),
+      decision = sa_should_switch(res, current_model = current_model),
       summary = summary,
       series = list(
         current_sa = current_sa,

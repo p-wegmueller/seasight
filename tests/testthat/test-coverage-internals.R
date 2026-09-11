@@ -68,10 +68,15 @@ test_that("comparison and UI decision helpers handle representative rows", {
   keep_res <- structure(
     list(
       table = tibble::tibble(
+        AICc = 10,
         QS_p = 0.20,
         LB_p = 0.20,
         dist_sa_L1 = 1,
         corr_seas = 0.95
+      ),
+      baseline = list(
+        diagnostics = tibble::tibble(AICc = 20, QS_p = 0.20, LB_p = 0.20),
+        aicc_comparable = TRUE
       )
     ),
     class = "auto_seasonal_analysis"
@@ -79,10 +84,15 @@ test_that("comparison and UI decision helpers handle representative rows", {
   fail_res <- structure(
     list(
       table = tibble::tibble(
+        AICc = 10,
         QS_p = 0.01,
         LB_p = 0.20,
         dist_sa_L1 = 1,
         corr_seas = 0.95
+      ),
+      baseline = list(
+        diagnostics = tibble::tibble(AICc = 20, QS_p = 0.20, LB_p = 0.20),
+        aicc_comparable = TRUE
       )
     ),
     class = "auto_seasonal_analysis"

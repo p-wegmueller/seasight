@@ -136,7 +136,9 @@ for \code{outlier_critical}.}
 An object of class \code{"auto_seasonal_analysis"} with components
 such as \code{best} (best \code{seas} model), \code{table} (diagnostic and ranking
 table), \code{specs_tried}, \code{frequency}, \code{transform}, \code{baseline}, and
-\code{seasonality}.
+\code{seasonality}. When \code{current_model} is supplied, \code{baseline} includes its
+diagnostics and an indicator of whether its AICc is comparable with the
+selected candidate.
 }
 \description{
 Runs a grid of X-13ARIMA-SEATS specifications, computes diagnostics

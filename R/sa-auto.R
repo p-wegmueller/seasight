@@ -100,7 +100,9 @@ NULL
 #' @return An object of class `"auto_seasonal_analysis"` with components
 #'   such as `best` (best `seas` model), `table` (diagnostic and ranking
 #'   table), `specs_tried`, `frequency`, `transform`, `baseline`, and
-#'   `seasonality`.
+#'   `seasonality`. When `current_model` is supplied, `baseline` includes its
+#'   diagnostics and an indicator of whether its AICc is comparable with the
+#'   selected candidate.
 #'
 #' @examples
 #' \donttest{
@@ -258,7 +260,13 @@ auto_seasonal_analysis <- function(y,
         frequency = freq,
         transform = transform_fun,
         weak_seasonality = TRUE,
-        baseline = list(current_sa = current_sa, current_seasonal = current_seasonal),
+        baseline = .build_switch_baseline(
+          current_model = current_model,
+          y = y,
+          current_sa = current_sa,
+          current_seasonal = current_seasonal,
+          candidate_transform = transform_fun
+        ),
         seasonality = list(
           overall = tibble::tibble(
             call_overall = "DO_NOT_ADJUST",
@@ -513,7 +521,14 @@ auto_seasonal_analysis <- function(y,
       frequency = freq,
       transform = transform_fun,
       weak_seasonality = weak_seasonality_flag,
-      baseline = list(current_sa = current_sa, current_seasonal = current_seasonal),
+      baseline = .build_switch_baseline(
+        current_model = current_model,
+        y = y,
+        best_model = best_fit,
+        current_sa = current_sa,
+        current_seasonal = current_seasonal,
+        candidate_transform = transform_fun
+      ),
       seasonality = seasonality
     ),
     class = "auto_seasonal_analysis"

@@ -488,7 +488,7 @@ between releases) combined with periodic, well-documented model reviews.
 > **With seasight**
 >
 > * `current_model` lets you treat the existing production spec as an explicit baseline.
-> * `sa_should_switch()` implements a transparent decision rule for model changes.
+> * `sa_should_switch()` requires a material, diagnostically defensible improvement over that baseline.
 > * `sa_compare()` summarises the impact of switching in terms of diagnostics and aligned series.
 
 ### 3.5 Documentation, transparency and reproducibility

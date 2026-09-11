@@ -737,6 +737,81 @@ build_user_xreg <- function(y,
   list(a = as.numeric(Z[, "a"]), b = as.numeric(Z[, "b"]))
 }
 
+.same_ts_values <- function(x, y, tolerance = sqrt(.Machine$double.eps)) {
+  x <- .ts_or_null(x)
+  y <- .ts_or_null(y)
+  if (is.null(x) || is.null(y)) return(FALSE)
+  if (length(x) != length(y)) return(FALSE)
+  if (!isTRUE(all.equal(stats::tsp(x), stats::tsp(y), tolerance = tolerance))) return(FALSE)
+  isTRUE(all.equal(
+    as.numeric(x),
+    as.numeric(y),
+    tolerance = tolerance,
+    check.attributes = FALSE
+  ))
+}
+
+.build_switch_baseline <- function(current_model = NULL,
+                                   y = NULL,
+                                   best_model = NULL,
+                                   current_sa = NULL,
+                                   current_seasonal = NULL,
+                                   candidate_transform = NA_character_) {
+  baseline <- list(
+    current_sa = current_sa,
+    current_seasonal = current_seasonal,
+    diagnostics = NULL,
+    same_input = FALSE,
+    same_transform = FALSE,
+    same_n = FALSE,
+    aicc_comparable = FALSE
+  )
+  if (!inherits(current_model, "seas")) return(baseline)
+
+  current_original <- tryCatch(seasonal::original(current_model), error = function(e) NULL)
+  current_transform <- suppressMessages(
+    tryCatch(.transform_label(current_model), error = function(e) NA_character_)
+  )
+  best_transform <- if (inherits(best_model, "seas")) {
+    suppressMessages(
+      tryCatch(
+        .transform_label(best_model, fallback = candidate_transform),
+        error = function(e) candidate_transform
+      )
+    )
+  } else {
+    tolower(as.character(candidate_transform)[1])
+  }
+
+  current_n <- tryCatch(.obs_n(current_model), error = function(e) NA_integer_)
+  best_n <- if (inherits(best_model, "seas")) {
+    tryCatch(.obs_n(best_model), error = function(e) NA_integer_)
+  } else {
+    NA_integer_
+  }
+
+  baseline$diagnostics <- tibble::tibble(
+    model = "current",
+    arima = tryCatch(.arima_string(current_model), error = function(e) NA_character_),
+    engine = tryCatch(.engine_used(current_model), error = function(e) NA_character_),
+    AICc = tryCatch(.aicc(current_model), error = function(e) NA_real_),
+    QS_p = tryCatch(.qs_overall_on_SA(current_model), error = function(e) NA_real_),
+    LB_p = tryCatch(.lb_p(current_model), error = function(e) NA_real_),
+    transform = current_transform,
+    n = current_n
+  )
+  baseline$same_input <- .same_ts_values(current_original, y)
+  baseline$same_transform <- is.character(current_transform) &&
+    length(current_transform) == 1L && !is.na(current_transform) &&
+    is.character(best_transform) && length(best_transform) == 1L &&
+    !is.na(best_transform) && identical(tolower(current_transform), tolower(best_transform))
+  baseline$same_n <- is.finite(current_n) && is.finite(best_n) && current_n == best_n
+  baseline$aicc_comparable <- isTRUE(
+    baseline$same_input && baseline$same_transform && baseline$same_n
+  )
+  baseline
+}
+
 .dist_vs_baseline <- function(m, prev_sa = NULL, prev_seasonal = NULL) {
   out <- tibble::tibble(
     dist_sa_L1    = NA_real_,

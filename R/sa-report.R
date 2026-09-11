@@ -219,20 +219,21 @@ sa_issue_report_html <- function(
   
   # --- Decision pill text -------------------------------------------------
   has_baseline <- !is.null(current_model) || !is.null(res$baseline$current_sa)
+  switch_assessment <- NULL
   decision_txt <- if (dna) {
     "DO_NOT_ADJUST"
   } else if (!has_baseline) {
     "no current model provided"
   } else {
-    sa_should_switch(res)  # "CHANGE_TO_NEW_MODEL" or "KEEP_CURRENT_MODEL"
+    switch_assessment <- sa_should_switch(
+      res,
+      current_model = current_model,
+      details = TRUE
+    )
+    switch_assessment$decision
   }
   
-  decision_reason <- NULL
-  if (identical(decision_txt, "KEEP_CURRENT_MODEL") && is.finite(best_r$LB_p) && best_r$LB_p < 0.05) {
-    decision_reason <- "Best candidate fails residual autocorrelation test"
-  } else if (identical(decision_txt, "KEEP_CURRENT_MODEL") && is.finite(best_r$corr_seas) && best_r$corr_seas > 0.995) {
-    decision_reason <- "New model produces almost identical seasonal factors"
-  }
+  decision_reason <- if (!is.null(switch_assessment)) switch_assessment$reason else NULL
   
   # Copy-paste code blocks
   if (no_sa) {

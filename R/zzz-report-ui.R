@@ -197,15 +197,29 @@ t_safe <- function(x) {
   score_gap <- if (is.finite(score) && is.finite(runner_score)) score - runner_score else NA_real_
 
   existence <- tryCatch(.existence_call_ui(res)$call, error = function(e) NA_character_)
-  dec <- tryCatch(.compose_decision(existence, br, has_current = !is.null(current_model)), error = function(e) NULL)
-  switch_decision <- if (!is.null(current_model) && !is.null(dec) && identical(dec$decision, "ADJUST")) {
-    tryCatch(sa_should_switch(res), error = function(e) NA_character_)
+  has_current <- !is.null(current_model) ||
+    !is.null(res$baseline$current_sa) ||
+    !is.null(res$baseline$diagnostics)
+  dec <- tryCatch(.compose_decision(existence, br, has_current = has_current), error = function(e) NULL)
+  switch_assessment <- if (has_current && !is.null(dec) && identical(dec$decision, "ADJUST")) {
+    tryCatch(
+      sa_should_switch(res, current_model = current_model, details = TRUE),
+      error = function(e) NULL
+    )
+  } else {
+    NULL
+  }
+  switch_decision <- if (!is.null(switch_assessment)) {
+    switch_assessment$decision
   } else {
     if (!is.null(dec)) dec$decision else NA_character_
   }
-  gate_reason <- if (!is.null(dec) && !identical(dec$decision, "ADJUST")) dec$reason else NA_character_
-  if (!is.null(current_model) && identical(switch_decision, "KEEP_CURRENT_MODEL") && is.na(gate_reason)) {
-    gate_reason <- "The switch gate recommends keeping the current model."
+  gate_reason <- if (!is.null(switch_assessment)) {
+    switch_assessment$reason
+  } else if (!is.null(dec) && !identical(dec$decision, "ADJUST")) {
+    dec$reason
+  } else {
+    NA_character_
   }
 
   qs_x11 <- get1(br, "QS_p_x11")
