@@ -107,8 +107,11 @@ NULL
 #' @return An object of class `"auto_seasonal_analysis"` with components
 #'   such as `best` (best `seas` model), `table` (diagnostic and ranking
 #'   table, including actual Easter inclusion in `with_easter` and its selected
-#'   window in `easter_window`, plus SEATS substitution metadata in
-#'   `SEATS_model_switch` and `SEATS_operative_model`), `specs_tried`,
+#'   window in `easter_window`, SEATS substitution metadata in
+#'   `SEATS_model_switch` and `SEATS_operative_model`, and peak-to-trough
+#'   seasonal amplitude in `seasonal_amp_pct`. For log models this is the
+#'   seasonal-factor range in percentage points; for level models it is the
+#'   additive range relative to the median absolute series level), `specs_tried`,
 #'   `frequency`, `transform`, `baseline`, and
 #'   `seasonality`. When `current_model` is supplied, `baseline` includes its
 #'   diagnostics and an indicator of whether its AICc is comparable with the
@@ -276,7 +279,10 @@ auto_seasonal_analysis <- function(y,
       QSori_p_seats = NA_real_,
       QSori_p = NA_real_,
       QS_p_x11_min_sma = NA_real_,
+      seasonal_amp_abs = NA_real_,
       seasonal_amp_pct = NA_real_,
+      seasonal_amp_level = NA_real_,
+      seasonal_amp_basis = NA_character_,
       vola_reduction_pct = NA_real_,
       dist_sa_L1 = NA_real_,
       dist_seas_RMS = NA_real_,
@@ -573,7 +579,8 @@ auto_seasonal_analysis <- function(y,
   best_lab <- ranked$model_label[1]
   best_fit <- fits[[match(best_lab, labels)]]
   
-  # Weak seasonality flag
+  # Weak seasonality requires both a sub-1 percentage-point peak-to-trough
+  # amplitude and less than 5% volatility reduction.
   weak_seasonality_flag <- with(ranked[1, ],
                                 is.finite(seasonal_amp_pct) & seasonal_amp_pct < 1 &
                                   is.finite(vola_reduction_pct) & vola_reduction_pct < 5

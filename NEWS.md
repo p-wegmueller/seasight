@@ -2,6 +2,10 @@
 
 ## Submission-readiness update
 
+- Correct seasonal-amplitude scaling: log models now report the
+  peak-to-trough seasonal-factor range in percentage points, level models use
+  the additive range relative to the median absolute level, and unavailable
+  components produce `NA` rather than zero.
 - Render unavailable QS diagnostics explicitly in the existence and
   engine-choice cards instead of producing incomplete labels or errors.
 - Surface SEATS model substitutions in the report summary and engine-choice

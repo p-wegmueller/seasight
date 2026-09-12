@@ -283,6 +283,10 @@ sa_copyable_call <- function(m, x_expr, xreg_expr = NA,
 #' Delegates to the internal `.do_not_adjust()` to keep logic in one place.
 #' @param row One-row tibble from `res$table`.
 #' @return TRUE if the row satisfies the "do not adjust" rule, FALSE otherwise.
+#' @details The weak-amplitude threshold is one percentage point of
+#'   peak-to-trough seasonal amplitude. For log models, the amplitude is the
+#'   seasonal-factor range multiplied by 100. For level models, it is the
+#'   additive seasonal range relative to the median absolute series level.
 #'
 #' @examples
 #' row <- tibble::tibble(

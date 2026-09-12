@@ -50,6 +50,41 @@ t_safe <- function(x) {
   if (is.finite(value)) .fmtP(value) else "\u2014"
 }
 
+.seasonal_amplitude_report_text <- function(row) {
+  amplitude <- .report_numeric(.report_get(row, "seasonal_amp_abs", NA_real_))
+  amplitude_pct <- .report_numeric(
+    .report_get(row, "seasonal_amp_pct", NA_real_)
+  )
+  basis <- .report_chr(.report_get(row, "seasonal_amp_basis", ""), "")
+
+  if (!is.finite(amplitude)) return("Seasonal amplitude: unavailable.")
+
+  if (identical(basis, "multiplicative_factor") && is.finite(amplitude_pct)) {
+    return(sprintf(
+      "Seasonal-factor peak-to-trough range: %.2f (%.1f percentage points).",
+      amplitude, amplitude_pct
+    ))
+  }
+
+  if (identical(basis, "additive_median_abs_level")) {
+    if (is.finite(amplitude_pct)) {
+      return(sprintf(
+        "Additive seasonal peak-to-trough range: %.2f (%.1f%% of median absolute level).",
+        amplitude, amplitude_pct
+      ))
+    }
+    return(paste0(
+      "Additive seasonal peak-to-trough range: ", sprintf("%.2f", amplitude),
+      " (percentage unavailable: median absolute level is zero or unavailable)."
+    ))
+  }
+
+  if (is.finite(amplitude_pct)) {
+    return(sprintf("Seasonal peak-to-trough amplitude: %.1f%%.", amplitude_pct))
+  }
+  "Seasonal amplitude: unavailable."
+}
+
 .report_norm <- function(x) gsub("\\s+", " ", trimws(ifelse(is.na(x), "", as.character(x))))
 
 .report_td_label <- function(row) {
@@ -157,7 +192,7 @@ t_safe <- function(x) {
     c("Label", "Requested ARIMA", "Operative SEATS model", "SEATS switch",
       "Score (0-100)", "TD regressor", "Easter", "AICc", "LB p", "QSori p",
       "QS X-11 p", "QS SEATS p", "QS min", "TD p", "Volatility red. %",
-      "Seasonal amp %", "L1 vs prev SA", "Rev. MAE"),
+      "Seasonal P-T amp. %", "L1 vs prev SA", "Rev. MAE"),
     htmltools::tags$th
   ))
 
@@ -322,7 +357,7 @@ t_safe <- function(x) {
         "Diagnostics for the winner: QS(X-11) p = ", P(qs_x11),
         ", QS(SEATS) p = ", P(qs_seats),
         ", overall QS = ", P(qs_min), "; Ljung-Box p = ", P(lb_p),
-        "; volatility reduction = ", N(vola_red, 1), "%; seasonal amplitude = ",
+        "; volatility reduction = ", N(vola_red, 1), "%; seasonal peak-to-trough amplitude = ",
         N(seas_amp, 2), "%."
       ))
     ),

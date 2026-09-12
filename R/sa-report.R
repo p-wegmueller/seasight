@@ -421,10 +421,10 @@ sa_issue_report_html <- function(
         "p = {.flagP(best_r$td_p, 0.05)}."
       )
     }
-    amp_line <- glue::glue(
-      "Seasonal amplitude: { .num(best_r$seasonal_amp_abs,2) } ",
-      "({ .pct(best_r$seasonal_amp_pct,1) } of level). ",
-      "Volatility reduction (SA vs raw): { .pct(best_r$vola_reduction_pct,1) }."
+    amp_line <- paste0(
+      .seasonal_amplitude_report_text(best_r), " ",
+      "Volatility reduction (SA vs raw): ",
+      .pct(best_r$vola_reduction_pct, 1), "."
     )
   }
   
@@ -671,7 +671,7 @@ document.addEventListener('click', function(e){
                                                                            "Columns include: AICc; Ljung-Box p (residual autocorrelation); QS p-values from X-11 and SEATS; ",
                                                                            "overall QS (the minimum of those two); trading-day p (if a TD regressor is present); ",
                                                                            "volatility reduction of SA vs. original (based on percent-change standard deviations); ",
-                                                                           "seasonal amplitude as % of the original level; L1 distance of the new SA vs. the current SA (if available); ",
+                                                                           "peak-to-trough seasonal amplitude (factor percentage-point range for log models; additive range relative to median absolute level otherwise); L1 distance of the new SA vs. the current SA (if available); ",
                                                                            "and mean absolute history-change revision (Rev. MAE)."
                                                          )
                                           )
@@ -998,7 +998,7 @@ sa_top_candidates_table <- function(res, current_model = NULL, y = NULL, n = 5) 
 
   th <- c("Label","ARIMA","TD regressor","Score (0-100)","AICc","LB p",
           "QSori p","QS X-11 p","QS SEATS p","QS (min)","TD p",
-          "Volatility \u2193 %","Seasonal amp %","L1 vs prev SA","Rev MAE")
+          "Volatility \u2193 %","Seasonal P-T amp. %","L1 vs prev SA","Rev MAE")
   header <- htmltools::tags$tr(lapply(th, htmltools::tags$th))
   
   body_rows <- lapply(seq_len(n_top), function(i) {
@@ -1136,7 +1136,7 @@ sa_top_candidates_table <- function(res, current_model = NULL, y = NULL, n = 5) 
           "Diagnostics for the winner: QS(X-11) p = ", P(qs_x11),
           ", QS(SEATS) p = ", P(qs_seats),
           " \u2192 overall QS = ", P(qs_min), "; Ljung-Box p = ", P(lb_p),
-          "; volatility reduction (SA vs. original) = ", N(vola_red, 1), "%; seasonal amplitude = ",
+          "; volatility reduction (SA vs. original) = ", N(vola_red, 1), "%; seasonal peak-to-trough amplitude = ",
           N(seas_amp, 2), "%."
         )
       )

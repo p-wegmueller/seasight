@@ -145,8 +145,11 @@ regressors must be available in the incumbent model.}
 An object of class \code{"auto_seasonal_analysis"} with components
 such as \code{best} (best \code{seas} model), \code{table} (diagnostic and ranking
 table, including actual Easter inclusion in \code{with_easter} and its selected
-window in \code{easter_window}, plus SEATS substitution metadata in
-\code{SEATS_model_switch} and \code{SEATS_operative_model}), \code{specs_tried},
+window in \code{easter_window}, SEATS substitution metadata in
+\code{SEATS_model_switch} and \code{SEATS_operative_model}, and peak-to-trough
+seasonal amplitude in \code{seasonal_amp_pct}. For log models this is the
+seasonal-factor range in percentage points; for level models it is the
+additive range relative to the median absolute series level), \code{specs_tried},
 \code{frequency}, \code{transform}, \code{baseline}, and
 \code{seasonality}. When \code{current_model} is supplied, \code{baseline} includes its
 diagnostics and an indicator of whether its AICc is comparable with the

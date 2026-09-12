@@ -145,7 +145,9 @@ The most important components are:
   * `QS_p_x11`, `QS_p_seats`, `QS_p` – QS on SA,
   * `QSori_p_x11`, `QSori_p_seats`, `QSori_p` – QS on original,
   * `LB_p` – Ljung–Box p-value,
-  * `seasonal_amp_pct` – seasonal amplitude (% of level),
+  * `seasonal_amp_pct` – peak-to-trough seasonal amplitude: the seasonal-factor
+    range in percentage points for log models, or the additive component range
+    as a percentage of the median absolute series level for level models,
   * `vola_reduction_pct` – volatility reduction (%),
   * `dist_sa_L1` – L1 distance vs. the current SA (if supplied),
   * `rev_mae` – mean absolute revision (if history info is available),

@@ -864,41 +864,112 @@ build_user_xreg <- function(y,
 # Finance-style diagnostics
 .ts_pc_sd <- function(x) stats::sd(tsbox::ts_pc(x), na.rm = TRUE)
 
+.seasonal_amplitude <- function(seasonal_component, original, transform) {
+  unavailable <- tibble::tibble(
+    seasonal_amp_abs = NA_real_,
+    seasonal_amp_pct = NA_real_,
+    seasonal_amp_level = NA_real_,
+    seasonal_amp_basis = NA_character_
+  )
+
+  seasonal_ts <- .ts_or_null(seasonal_component)
+  if (is.null(seasonal_ts)) return(unavailable)
+
+  seasonal_values <- suppressWarnings(as.numeric(seasonal_ts))
+  seasonal_values <- seasonal_values[is.finite(seasonal_values)]
+  if (!length(seasonal_values)) return(unavailable)
+
+  amplitude <- diff(range(seasonal_values))
+  if (!is.finite(amplitude)) return(unavailable)
+
+  transform <- tryCatch(
+    tolower(as.character(transform[[1]])),
+    error = function(e) NA_character_
+  )
+
+  if (identical(transform, "log")) {
+    return(tibble::tibble(
+      seasonal_amp_abs = amplitude,
+      seasonal_amp_pct = 100 * amplitude,
+      seasonal_amp_level = 1,
+      seasonal_amp_basis = "multiplicative_factor"
+    ))
+  }
+
+  if (!identical(transform, "none")) {
+    unavailable$seasonal_amp_abs <- amplitude
+    return(unavailable)
+  }
+
+  original_ts <- .ts_or_null(original)
+  original_values <- if (is.null(original_ts)) {
+    numeric(0)
+  } else {
+    suppressWarnings(as.numeric(original_ts))
+  }
+  original_values <- original_values[is.finite(original_values)]
+  level <- if (length(original_values)) {
+    stats::median(abs(original_values))
+  } else {
+    NA_real_
+  }
+  scale <- if (length(original_values)) max(abs(original_values)) else NA_real_
+  tolerance <- sqrt(.Machine$double.eps) * scale
+  amplitude_pct <- if (
+    is.finite(level) && is.finite(tolerance) && level > tolerance
+  ) {
+    100 * amplitude / level
+  } else {
+    NA_real_
+  }
+
+  tibble::tibble(
+    seasonal_amp_abs = amplitude,
+    seasonal_amp_pct = amplitude_pct,
+    seasonal_amp_level = level,
+    seasonal_amp_basis = "additive_median_abs_level"
+  )
+}
+
 .diagnostics_finance <- function(m, orig_ts) {
   x_orig <- .ts_or_null(orig_ts)
   sa     <- tryCatch(seasonal::final(m), error = function(e) NULL)
   x_sa   <- .ts_or_null(sa)
+  model_transform <- .transform_label(m)
   
   # Try SEATS seasonal first, fallback to X-11 seasonal on ORIGINAL
   seas_comp <- tryCatch(seasonal::series(m, "seats.seasonal"), error = function(e) NULL)
+  seas_model <- m
   if (is.null(seas_comp) && !is.null(x_orig)) {
-    m_x11_orig <- tryCatch(seasonal::seas(x_orig, x11 = ""), error = function(e) NULL)
+    x11_args <- list(x = x_orig, x11 = "")
+    if (model_transform %in% c("log", "none")) {
+      x11_args$transform.function <- model_transform
+    }
+    m_x11_orig <- tryCatch(
+      do.call(seasonal::seas, x11_args),
+      error = function(e) NULL
+    )
     seas_comp  <- tryCatch(seasonal::series(m_x11_orig, "x11.seasonal"), error = function(e) NULL)
+    seas_model <- m_x11_orig
   }
   
   vola_orig <- if (!is.null(x_orig)) { x <- .pc_or_null(x_orig); if (is.null(x)) NA_real_ else stats::sd(x, na.rm = TRUE) } else NA_real_
   vola_sa   <- if (!is.null(x_sa))   { x <- .pc_or_null(x_sa);   if (is.null(x)) NA_real_ else stats::sd(x, na.rm = TRUE) }   else NA_real_
   vola_red_pct <- if (is.finite(vola_orig) && vola_orig > 0 && is.finite(vola_sa)) (1 - vola_sa / vola_orig) * 100 else NA_real_
   
-  if (!is.null(seas_comp)) {
-    seas_ts <- .ts_or_null(seas_comp)
-    if (!is.null(seas_ts) && !is.null(x_orig)) {
-      seas_amp_abs <- diff(range(seas_ts, na.rm = TRUE))
-      seas_amp_pct <- seas_amp_abs / mean(x_orig, na.rm = TRUE) * 100
-    } else {
-      seas_amp_abs <- 0; seas_amp_pct <- 0
-    }
+  transform <- if (is.null(seas_model)) {
+    NA_character_
   } else {
-    seas_amp_abs <- 0; seas_amp_pct <- 0
+    .transform_label(seas_model, fallback = model_transform)
   }
-  
+  amplitude <- .seasonal_amplitude(seas_comp, x_orig, transform)
+
   tibble::tibble(
     vola_sd_pc_orig    = as.numeric(vola_orig),
     vola_sd_pc_sa      = as.numeric(vola_sa),
-    vola_reduction_pct = as.numeric(vola_red_pct),
-    seasonal_amp_abs   = as.numeric(seas_amp_abs),
-    seasonal_amp_pct   = as.numeric(seas_amp_pct)
-  )
+    vola_reduction_pct = as.numeric(vola_red_pct)
+  ) |>
+    dplyr::bind_cols(amplitude)
 }
 
 # Revisions (mean absolute change revisions)
@@ -1094,6 +1165,8 @@ seasonality_summary <- function(tbl, majority = 0.6) {
   qs_ok  <- is.na(qsori) || qsori >= 0.10
   
   no_seats <- identical(row$SEATS_has_seasonal, FALSE)
+  # Peak-to-trough amplitude below 1 percentage point: factor range for log
+  # models, or additive range relative to the median absolute level otherwise.
   weak_amp <- is.finite(row$seasonal_amp_pct)   && row$seasonal_amp_pct   < 1
   low_gain <- is.finite(row$vola_reduction_pct) && row$vola_reduction_pct < 5
   
