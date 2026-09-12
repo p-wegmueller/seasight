@@ -293,20 +293,25 @@ sa_existence_card <- function(res) .build_existence_card(res)
   br   <- dplyr::slice(res$table, 1)
   ui_call <- tryCatch(.existence_call_ui(res), error = function(e) list(call = "\u2014", note = NULL))
   call <- ui_call$call
+
+  m7 <- .report_numeric(.report_get(br, "M7", NA_real_))
+  ids <- .report_chr(.report_get(br, "IDS", "n/a"), "n/a")
+  p_x11_ori <- .report_get(br, "QSori_p_x11", NA_real_)
+  p_seats_ori <- .report_get(br, "QSori_p_seats", NA_real_)
+  qso_values <- c(.report_numeric(p_x11_ori), .report_numeric(p_seats_ori))
   
   # M7 interpretation (X-11 rule of thumb)
-  m7_txt <- if (is.na(br$M7)) "n/a" else if (br$M7 < 0.90) "clear seasonality"
-  else if (br$M7 < 1.05) "weak seasonality" else "no seasonality"
+  m7_txt <- if (!is.finite(m7)) "n/a" else if (m7 < 0.90) "clear seasonality"
+  else if (m7 < 1.05) "weak seasonality" else "no seasonality"
   
   # IDS tolerant rendering
-  ids_txt <- if (is.na(br$IDS) || br$IDS == "") "n/a" else as.character(br$IDS)
+  ids_txt <- if (!nzchar(ids)) "n/a" else ids
   
   # QS on original (existence-of-seasonality)
-  qso_min <- suppressWarnings(pmin(br$QSori_p_x11, br$QSori_p_seats, na.rm = TRUE))
-  if (!is.finite(qso_min)) qso_min <- NA_real_
+  qso_min <- if (any(is.finite(qso_values))) min(qso_values, na.rm = TRUE) else NA_real_
   
   # SEATS seasonal component presence
-  seats_has <- br$SEATS_has_seasonal
+  seats_has <- .seats_switch_state(.report_get(br, "SEATS_has_seasonal", NA))
   seats_txt <- if (isTRUE(seats_has)) "present" else if (identical(seats_has, FALSE)) "absent" else "n/a"
   
   # One-sentence conclusion
@@ -320,12 +325,12 @@ sa_existence_card <- function(res) .build_existence_card(res)
       paste0("<b>IDS (ONS 'identifiable seasonality')</b>: ", ids_txt, ".")
     )),
     htmltools::tags$li(htmltools::HTML(
-      paste0("<b>M7 (X-11)</b>: ", .num(br$M7, 3), " \u2192 ", m7_txt, ".")
+      paste0("<b>M7 (X-11)</b>: ", .report_num(m7, 3), " \u2192 ", m7_txt, ".")
     )),
     htmltools::tags$li(htmltools::HTML(
-      paste0("<b>QS on original</b>: X-11 p = ", .fmtP(br$QSori_p_x11),
-             ", SEATS p = ", .fmtP(br$QSori_p_seats),
-             " \u2192 overall = ", .fmtP(qso_min), ".")
+      paste0("<b>QS on original</b>: X-11 p = ", .report_p(p_x11_ori),
+             ", SEATS p = ", .report_p(p_seats_ori),
+             " \u2192 overall = ", .report_p(qso_min), ".")
     )),
     htmltools::tags$li(htmltools::HTML(
       paste0("<b>SEATS seasonal component</b>: ", seats_txt, ".")
@@ -516,21 +521,24 @@ sa_engine_choice_card <- function(res) .build_engine_choice_card(res)
 .build_engine_choice_card <- function(res) {
   stopifnot(inherits(res, "auto_seasonal_analysis"))
   br  <- dplyr::slice(res$table, 1)
-  eng <- if ("engine" %in% names(br)) as.character(br$engine) else .engine_used(res$best)
-  
-  # small local formatters (don't rely on globals)
-  fmtP <- function(p) ifelse(is.na(p), "\u2014", ifelse(p < 0.001, "<0.001", sprintf("%.3f", p)))
+  eng <- .report_chr(
+    .report_get(
+      br, "engine",
+      tryCatch(.engine_used(res$best), error = function(e) "unknown")
+    ),
+    "unknown"
+  )
   
   # Residual seasonality (QS on SA) \u2014 higher p is better
-  p_x11_sa   <- br$QS_p_x11
-  p_seats_sa <- br$QS_p_seats
+  p_x11_sa   <- .report_get(br, "QS_p_x11", NA_real_)
+  p_seats_sa <- .report_get(br, "QS_p_seats", NA_real_)
   
   # Existence (QS on original)
-  p_x11_ori   <- dplyr::coalesce(br$QSori_p_x11, NA_real_)
-  p_seats_ori <- dplyr::coalesce(br$QSori_p_seats, NA_real_)
+  p_x11_ori   <- .report_get(br, "QSori_p_x11", NA_real_)
+  p_seats_ori <- .report_get(br, "QSori_p_seats", NA_real_)
   
   # SEATS flags
-  has_seas     <- br$SEATS_has_seasonal
+  has_seas     <- .seats_switch_state(.report_get(br, "SEATS_has_seasonal", NA))
   has_seas_txt <- if (isTRUE(has_seas)) "present" else if (identical(has_seas, FALSE)) "absent" else "n/a"
   switch_warning <- .seats_switch_warning_tag(res, location = "engine")
   
@@ -543,13 +551,13 @@ sa_engine_choice_card <- function(res) .build_engine_choice_card(res)
     # Why X-11 over SEATS?
     bullets <- htmltools::tags$ul(
       htmltools::tags$li(htmltools::HTML(
-        paste0("<b>Residual seasonality (QS on SA):</b> X-11 p = ", fmtP(p_x11_sa),
-               ", SEATS p = ", fmtP(p_seats_sa),
+        paste0("<b>Residual seasonality (QS on SA):</b> X-11 p = ", .report_p(p_x11_sa),
+               ", SEATS p = ", .report_p(p_seats_sa),
                ". X-11 yielded cleaner residuals (higher p).")
       )),
       htmltools::tags$li(htmltools::HTML(
-        paste0("<b>QS on original (existence):</b> X-11 p = ", fmtP(p_x11_ori),
-               ", SEATS p = ", fmtP(p_seats_ori), ".")
+        paste0("<b>QS on original (existence):</b> X-11 p = ", .report_p(p_x11_ori),
+               ", SEATS p = ", .report_p(p_seats_ori), ".")
       )),
       switch_warning,
       if (identical(has_seas, FALSE)) htmltools::tags$li(
@@ -561,13 +569,13 @@ sa_engine_choice_card <- function(res) .build_engine_choice_card(res)
     # eng == "seats" (or unknown defaults to SEATS in helpers)
     bullets <- htmltools::tags$ul(
       htmltools::tags$li(htmltools::HTML(
-        paste0("<b>Residual seasonality (QS on SA):</b> SEATS p = ", fmtP(p_seats_sa),
-               if (!is.na(p_x11_sa)) paste0(", X-11 p = ", fmtP(p_x11_sa)) else "",
+        paste0("<b>Residual seasonality (QS on SA):</b> SEATS p = ", .report_p(p_seats_sa),
+               ", X-11 p = ", .report_p(p_x11_sa),
                ". SEATS is equivalent or better.")
       )),
       htmltools::tags$li(htmltools::HTML(
-        paste0("<b>QS on original (existence):</b> SEATS p = ", fmtP(p_seats_ori),
-               if (!is.na(p_x11_ori)) paste0(", X-11 p = ", fmtP(p_x11_ori)) else "", ".")
+        paste0("<b>QS on original (existence):</b> SEATS p = ", .report_p(p_seats_ori),
+               ", X-11 p = ", .report_p(p_x11_ori), ".")
       )),
       htmltools::tags$li(htmltools::HTML(
         paste0("<b>SEATS seasonal component:</b> ", has_seas_txt, ".")

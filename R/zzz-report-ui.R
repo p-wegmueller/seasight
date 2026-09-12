@@ -11,23 +11,44 @@ t_safe <- function(x) {
 }
 
 .report_get <- function(row, nm, default = NA) {
-  if (!nm %in% names(row)) return(default)
-  v <- row[[nm]]
-  if (!length(v)) default else v[[1]]
+  tryCatch({
+    if (!nm %in% names(row)) return(default)
+    value <- row[[nm]]
+    if (!length(value)) return(default)
+    value <- value[[1]]
+    if (!length(value)) default else value[[1]]
+  }, error = function(e) default)
 }
 
 .report_chr <- function(x, default = "") {
-  x <- as.character(x %||% default)
-  x[is.na(x)] <- default
-  x
+  tryCatch({
+    if (is.null(x) || !length(x)) return(default)
+    if (is.list(x)) x <- x[[1]]
+    if (!length(x)) return(default)
+    value <- as.character(x[[1]])
+    if (is.na(value)) default else value
+  }, error = function(e) default)
+}
+
+.report_numeric <- function(x, default = NA_real_) {
+  tryCatch({
+    if (is.null(x) || !length(x)) return(default)
+    if (is.list(x)) x <- x[[1]]
+    if (!length(x)) return(default)
+    value <- suppressWarnings(as.numeric(x[[1]]))
+    if (length(value) != 1L || !is.finite(value)) default else value
+  }, error = function(e) default)
 }
 
 .report_num <- function(x, digits = 1) {
-  x <- suppressWarnings(as.numeric(x))
-  ifelse(is.finite(x), sprintf(paste0("%.", digits, "f"), x), "-")
+  value <- .report_numeric(x)
+  if (is.finite(value)) sprintf(paste0("%.", digits, "f"), value) else "-"
 }
 
-.report_p <- function(x) .fmtP(suppressWarnings(as.numeric(x)))
+.report_p <- function(x) {
+  value <- .report_numeric(x)
+  if (is.finite(value)) .fmtP(value) else "\u2014"
+}
 
 .report_norm <- function(x) gsub("\\s+", " ", trimws(ifelse(is.na(x), "", as.character(x))))
 

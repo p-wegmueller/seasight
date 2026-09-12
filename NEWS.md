@@ -2,6 +2,8 @@
 
 ## Submission-readiness update
 
+- Render unavailable QS diagnostics explicitly in the existence and
+  engine-choice cards instead of producing incomplete labels or errors.
 - Surface SEATS model substitutions in the report summary and engine-choice
   card. The candidates table now records a stable switch indicator alongside
   the requested and operative model specifications.
