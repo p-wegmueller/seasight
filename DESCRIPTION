@@ -7,7 +7,8 @@ Depends:
 Authors@R: 
     person("Philipp", "Wegmüller", 
            email = "philipp.wegmueller@seco.admin.ch", 
-           role = c("aut", "cre"))
+           role = c("aut", "cre"),
+           comment = c(ORCID = "0000-0001-7122-5838"))
 Description: Provides tools for automated diagnostics, model selection and
     reporting for seasonal adjustment based on X-13ARIMA-SEATS. Wraps the
     'seasonal' package to run and compare alternative specifications, extract
