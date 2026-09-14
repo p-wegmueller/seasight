@@ -7,7 +7,10 @@
 sa_should_switch(
   res,
   thresholds = list(min_qs_p = 0.1, max_dist_sa_mult = 1.25, min_corr_seas = 0.9,
-    min_lb_p = 0.05)
+    min_lb_p = 0.05, min_delta_aicc = 2, max_qs_p_drop = 0.05, max_lb_p_drop = 0.05,
+    identical_sa_tolerance = 1e-08),
+  current_model = NULL,
+  details = FALSE
 )
 }
 \arguments{
@@ -19,24 +22,39 @@ sa_should_switch(
 \item max_dist_sa_mult: allow SA L1 distance up to this multiple of the cross-candidate median
 \item min_corr_seas: minimum correlation of seasonal components (vs. incumbent)
 \item min_lb_p: minimum acceptable Ljung-Box p-value on residuals
+\item min_delta_aicc: minimum incumbent-minus-candidate AICc improvement
+\item max_qs_p_drop: maximum allowed decline in QS p-value vs. incumbent
+\item max_lb_p_drop: maximum allowed decline in Ljung-Box p-value vs. incumbent
+\item identical_sa_tolerance: relative tolerance used to identify equal adjusted series
 }}
+
+\item{current_model}{Optional fitted \code{seasonal::seas} incumbent. This is
+useful for older result objects that do not contain baseline diagnostics.}
+
+\item{details}{Logical. If \code{FALSE} (default), return only the decision string.
+If \code{TRUE}, return a list containing \code{decision}, \code{reason}, and \code{metrics}.}
 }
 \value{
-One of "CHANGE_TO_NEW_MODEL" or "KEEP_CURRENT_MODEL".
+One of \code{"CHANGE_TO_NEW_MODEL"}, \code{"KEEP_CURRENT_MODEL"},
+\code{"REVIEW_REQUIRED"}, or \code{"NO_BASELINE"}; with \code{details = TRUE}, a
+structured list containing the decision and its supporting evidence.
 }
 \description{
-Applies a conservative switching gate to the first row of \code{res$table}.
-The best candidate must pass residual QS and Ljung-Box thresholds, must not
-be too far from the incumbent relative to the candidate set, and must retain
-sufficient seasonal-component correlation when that comparison is available.
-AICc, revision metrics and engine preference affect the ranking in
-\code{\link[=auto_seasonal_analysis]{auto_seasonal_analysis()}}, but are not directly re-applied by this switching
-helper.
+Compares the first row of \code{res$table} with the incumbent model recorded by
+\code{\link[=auto_seasonal_analysis]{auto_seasonal_analysis()}}. The candidate must improve comparable AICc by a
+material amount, pass absolute residual diagnostics, avoid material
+deterioration relative to the incumbent, and satisfy the existing distance
+and seasonal-correlation safeguards. Identical adjusted series are kept.
 }
 \examples{
 \donttest{
 if (requireNamespace("seasonal", quietly = TRUE)) {
-  res <- auto_seasonal_analysis(AirPassengers, max_specs = 3)
+  current_model <- seasonal::seas(AirPassengers)
+  res <- auto_seasonal_analysis(
+    AirPassengers,
+    current_model = current_model,
+    max_specs = 3
+  )
   sa_should_switch(res)
 }
 }

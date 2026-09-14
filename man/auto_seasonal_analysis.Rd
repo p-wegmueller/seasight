@@ -32,7 +32,8 @@ auto_seasonal_analysis(
   outlier_types = c("AO", "LS", "TC"),
   outlier_method = "AddOne",
   outlier_critical = 4,
-  outlier_alpha = NULL
+  outlier_alpha = NULL,
+  comparison_mode = c("full_search", "incumbent_fixed")
 )
 }
 \arguments{
@@ -69,12 +70,13 @@ be a time series aligned with \code{y}.}
 \code{xreg} is used (default \code{"td"}).}
 
 \item{include_easter}{Controls inclusion of Easter regressors:
-\code{"auto"} (default) lets the procedure decide, \code{"always"} always
-includes Easter, \code{"off"} never includes Easter. A logical value is
-also accepted and mapped to \code{"auto"}/\code{"off"}.}
+\code{"auto"} (default) asks X-13 to select among its supported Easter
+windows or reject Easter, \code{"always"} fixes \code{easter[easter_len]}, and
+\code{"off"} neither includes nor tests Easter. A logical value is also
+accepted and mapped to \code{"auto"}/\code{"off"}.}
 
-\item{easter_len}{Integer, length (in days) of the Easter effect when
-included.}
+\item{easter_len}{Integer, length (in days) of the Easter effect imposed by
+\code{include_easter = "always"}. It is ignored in \code{"auto"} and \code{"off"} modes.}
 
 \item{include_history_top_n}{Integer, number of top-ranked models for
 which revision metrics over the history are computed before the
@@ -131,12 +133,28 @@ method (passed to \code{seasonal::seas()}, e.g. \code{"AddOne"}).}
 \item{outlier_alpha}{Optional numeric significance level for outlier
 detection. If supplied, it is converted to a two-sided normal cutoff
 for \code{outlier_critical}.}
+
+\item{comparison_mode}{Comparison design. \code{"full_search"} (default) lets
+every candidate select its own regressors and outliers.
+\code{"incumbent_fixed"} requires \code{current_model}, retains its selected
+transformation and effective regression variables, and varies only the
+requested ARIMA specification and decomposition engine. Stored user
+regressors must be available in the incumbent model.}
 }
 \value{
 An object of class \code{"auto_seasonal_analysis"} with components
 such as \code{best} (best \code{seas} model), \code{table} (diagnostic and ranking
-table), \code{specs_tried}, \code{frequency}, \code{transform}, \code{baseline}, and
-\code{seasonality}.
+table, including actual Easter inclusion in \code{with_easter} and its selected
+window in \code{easter_window}, SEATS substitution metadata in
+\code{SEATS_model_switch} and \code{SEATS_operative_model}, and peak-to-trough
+seasonal amplitude in \code{seasonal_amp_pct}. For log models this is the
+seasonal-factor range in percentage points; for level models it is the
+additive range relative to the median absolute series level), \code{specs_tried},
+\code{frequency}, \code{transform}, \code{baseline}, and
+\code{seasonality}. When \code{current_model} is supplied, \code{baseline} includes its
+diagnostics and an indicator of whether its AICc is comparable with the
+selected candidate. \code{comparison_mode} and \code{regressor_comparison} describe
+whether candidate AICc differences hold the incumbent regressors fixed.
 }
 \description{
 Runs a grid of X-13ARIMA-SEATS specifications, computes diagnostics

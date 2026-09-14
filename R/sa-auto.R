@@ -52,11 +52,12 @@ NULL
 #' @param td_usertype Character string passed as `regression.usertype` when
 #'   `xreg` is used (default `"td"`).
 #' @param include_easter Controls inclusion of Easter regressors:
-#'   `"auto"` (default) lets the procedure decide, `"always"` always
-#'   includes Easter, `"off"` never includes Easter. A logical value is
-#'   also accepted and mapped to `"auto"`/`"off"`.
-#' @param easter_len Integer, length (in days) of the Easter effect when
-#'   included.
+#'   `"auto"` (default) asks X-13 to select among its supported Easter
+#'   windows or reject Easter, `"always"` fixes `easter[easter_len]`, and
+#'   `"off"` neither includes nor tests Easter. A logical value is also
+#'   accepted and mapped to `"auto"`/`"off"`.
+#' @param easter_len Integer, length (in days) of the Easter effect imposed by
+#'   `include_easter = "always"`. It is ignored in `"auto"` and `"off"` modes.
 #' @param include_history_top_n Integer, number of top-ranked models for
 #'   which revision metrics over the history are computed before the
 #'   final ranking step.
@@ -64,6 +65,12 @@ NULL
 #'   marking the end of an early sample period used for stability checks.
 #' @param current_model Optional incumbent `seasonal::seas` object used as
 #'   a baseline for distance measures and comparison.
+#' @param comparison_mode Comparison design. `"full_search"` (default) lets
+#'   every candidate select its own regressors and outliers.
+#'   `"incumbent_fixed"` requires `current_model`, retains its selected
+#'   transformation and effective regression variables, and varies only the
+#'   requested ARIMA specification and decomposition engine. Stored user
+#'   regressors must be available in the incumbent model.
 #' @param current_sa Optional baseline seasonally adjusted series. If not
 #'   supplied, it is extracted from `current_model` when possible.
 #' @param current_seasonal Optional baseline seasonal component. If not
@@ -99,8 +106,17 @@ NULL
 #'
 #' @return An object of class `"auto_seasonal_analysis"` with components
 #'   such as `best` (best `seas` model), `table` (diagnostic and ranking
-#'   table), `specs_tried`, `frequency`, `transform`, `baseline`, and
-#'   `seasonality`.
+#'   table, including actual Easter inclusion in `with_easter` and its selected
+#'   window in `easter_window`, SEATS substitution metadata in
+#'   `SEATS_model_switch` and `SEATS_operative_model`, and peak-to-trough
+#'   seasonal amplitude in `seasonal_amp_pct`. For log models this is the
+#'   seasonal-factor range in percentage points; for level models it is the
+#'   additive range relative to the median absolute series level), `specs_tried`,
+#'   `frequency`, `transform`, `baseline`, and
+#'   `seasonality`. When `current_model` is supplied, `baseline` includes its
+#'   diagnostics and an indicator of whether its AICc is comparable with the
+#'   selected candidate. `comparison_mode` and `regressor_comparison` describe
+#'   whether candidate AICc differences hold the incumbent regressors fixed.
 #'
 #' @examples
 #' \donttest{
@@ -140,7 +156,8 @@ auto_seasonal_analysis <- function(y,
                                    outlier_types    = c("AO","LS","TC"),
                                    outlier_method   = "AddOne",
                                    outlier_critical = 4,
-                                   outlier_alpha    = NULL) {
+                                   outlier_alpha    = NULL,
+                                   comparison_mode = c("full_search", "incumbent_fixed")) {
   
   # prefer a project-level ranker; else use a robust fallback
   .ranker <- get0(".rank_candidates", mode = "function", inherits = TRUE)
@@ -187,6 +204,20 @@ auto_seasonal_analysis <- function(y,
   }
   
   engine <- match.arg(engine)
+  comparison_mode <- match.arg(comparison_mode)
+
+  if (identical(comparison_mode, "incumbent_fixed") && !is.null(td_candidates)) {
+    stop(
+      "`td_candidates` cannot be supplied with `comparison_mode = \"incumbent_fixed\"` because that mode keeps the incumbent regressor set unchanged.",
+      call. = FALSE
+    )
+  }
+  fixed_regression <- if (identical(comparison_mode, "incumbent_fixed")) {
+    .incumbent_fixed_spec(current_model, y)
+  } else {
+    NULL
+  }
+  if (!is.null(fixed_regression)) transform_fun <- fixed_regression$transform
   
   # normalize & validate TD candidates (names, class, frequency)
   td_candidates <- .normalize_td_candidates(
@@ -221,12 +252,25 @@ auto_seasonal_analysis <- function(y,
       with_td = FALSE,
       td_name = NA_character_,
       with_easter = FALSE,
+      easter_window = NA_integer_,
+      comparison_mode = comparison_mode,
+      regression_variables = if (inherits(current_model, "seas")) {
+        .collapse_regression_terms(.regression_metadata(current_model)$effective_variables)
+      } else {
+        "none"
+      },
+      outlier_variables = if (inherits(current_model, "seas")) {
+        .collapse_regression_terms(.regression_metadata(current_model)$outliers)
+      } else {
+        "none"
+      },
       engine = NA_character_,
       AICc = NA_real_,
       M7 = NA_real_,
       IDS = NA_character_,
       LB_p = NA_real_,
       SEATS_model_switch = NA,
+      SEATS_operative_model = NA_character_,
       SEATS_has_seasonal = NA,
       QS_p_x11 = NA_real_,
       QS_p_seats = NA_real_,
@@ -235,7 +279,10 @@ auto_seasonal_analysis <- function(y,
       QSori_p_seats = NA_real_,
       QSori_p = NA_real_,
       QS_p_x11_min_sma = NA_real_,
+      seasonal_amp_abs = NA_real_,
       seasonal_amp_pct = NA_real_,
+      seasonal_amp_level = NA_real_,
+      seasonal_amp_basis = NA_character_,
       vola_reduction_pct = NA_real_,
       dist_sa_L1 = NA_real_,
       dist_seas_RMS = NA_real_,
@@ -257,8 +304,18 @@ auto_seasonal_analysis <- function(y,
         specs_tried = character(0),
         frequency = freq,
         transform = transform_fun,
+        comparison_mode = comparison_mode,
+        regressor_comparison = .compare_regression_sets(
+          NULL, current_model, comparison_mode
+        ),
         weak_seasonality = TRUE,
-        baseline = list(current_sa = current_sa, current_seasonal = current_seasonal),
+        baseline = .build_switch_baseline(
+          current_model = current_model,
+          y = y,
+          current_sa = current_sa,
+          current_seasonal = current_seasonal,
+          candidate_transform = transform_fun
+        ),
         seasonality = list(
           overall = tibble::tibble(
             call_overall = "DO_NOT_ADJUST",
@@ -308,7 +365,8 @@ auto_seasonal_analysis <- function(y,
       outlier_types       = outlier_types,
       outlier_method      = outlier_method,
       outlier_critical    = outlier_critical,
-      engine              = engine
+      engine              = engine,
+      fixed_regression    = fixed_regression
     )
     if (length(base)) out <- c(out, lapply(base, function(z){ z$td_name <- NA_character_; z }))
     
@@ -329,7 +387,8 @@ auto_seasonal_analysis <- function(y,
           outlier_types       = outlier_types,
           outlier_method      = outlier_method,
           outlier_critical    = outlier_critical,
-          engine              = engine
+          engine              = engine,
+          fixed_regression    = fixed_regression
         )
         if (length(with_td)) out <- c(out, lapply(with_td, function(z){ z$td_name <- nm; z }))
       }
@@ -344,7 +403,7 @@ auto_seasonal_analysis <- function(y,
     function(b) any(vapply(b, function(x) inherits(x$model, "seas"), logical(1))),
     logical(1)
   ))
-  if (!any_ok && identical(engine, "seats")) {
+  if (!any_ok && identical(engine, "seats") && is.null(fixed_regression)) {
     fit_bundles <- purrr::map(specs, function(spec_str) {
       out <- list()
       base <- .fit_spec(
@@ -357,7 +416,8 @@ auto_seasonal_analysis <- function(y,
         outlier_types       = outlier_types,
         outlier_method      = outlier_method,
         outlier_critical    = outlier_critical,
-        engine              = "auto"
+        engine              = "auto",
+        fixed_regression    = fixed_regression
       )
       if (length(base)) out <- c(out, lapply(base, function(z){ z$td_name <- NA_character_; z }))
       
@@ -377,7 +437,8 @@ auto_seasonal_analysis <- function(y,
             outlier_types       = outlier_types,
             outlier_method      = outlier_method,
             outlier_critical    = outlier_critical,
-            engine              = "auto"
+            engine              = "auto",
+            fixed_regression    = fixed_regression
           )
           if (length(with_td)) out <- c(out, lapply(with_td, function(z){ z$td_name <- nm; z }))
         }
@@ -390,6 +451,7 @@ auto_seasonal_analysis <- function(y,
   # Collapse bundles to flat vectors (keep only successfully estimated models)
   fits <- list(); labels <- character(0)
   with_td_flag <- logical(0); with_easter_flag <- logical(0)
+  easter_window_vec <- integer(0)
   td_name_vec <- character(0)
   
   for (i in seq_along(fit_bundles)) {
@@ -401,25 +463,48 @@ auto_seasonal_analysis <- function(y,
       labels           <- c(labels, paste0("Spec_", length(fits)))
       with_td_flag     <- c(with_td_flag,     isTRUE(b$with_td))
       with_easter_flag <- c(with_easter_flag, isTRUE(b$with_easter))
+      easter_window_vec <- c(easter_window_vec, as.integer(b$easter_window %||% NA_integer_))
       td_name_vec      <- c(td_name_vec,      b$td_name %||% NA_character_)
     }
   }
-  if (!length(fits)) stop("All candidate specifications failed to estimate.")
+  if (!length(fits)) {
+    if (!is.null(fixed_regression)) {
+      fit_errors <- unlist(lapply(fit_bundles, function(bundle) {
+        vapply(bundle, function(x) x$err %||% NA_character_, character(1))
+      }), use.names = FALSE)
+      fit_errors <- fit_errors[!is.na(fit_errors) & nzchar(fit_errors)]
+      detail <- if (length(fit_errors)) paste0(" First X-13 error: ", fit_errors[[1]]) else ""
+      stop(
+        paste0(
+          "All incumbent-fixed candidate specifications failed while retaining the incumbent transformation and regressors.",
+          detail
+        ),
+        call. = FALSE
+      )
+    }
+    stop("All candidate specifications failed to estimate.")
+  }
   
   # --- Diagnostics table --------------------------------------------------------
   base_tbl <- purrr::imap_dfr(fits, function(m, i) {
+    regression <- .regression_metadata(m)
     tibble::tibble(
       model_label = labels[[i]],
       arima       = .arima_string(m),
       with_td     = with_td_flag[[i]],
       td_name     = td_name_vec[[i]],
       with_easter = with_easter_flag[[i]],
+      easter_window = easter_window_vec[[i]],
+      comparison_mode = comparison_mode,
+      regression_variables = .collapse_regression_terms(regression$effective_variables),
+      outlier_variables = .collapse_regression_terms(regression$outliers),
       engine      = .engine_used(m),
       AICc        = tryCatch(.aicc(m), error = function(e) NA_real_),
       M7          = tryCatch(.m7_stat(m), error = function(e) NA_real_),
       IDS         = tryCatch(.ids_flag(m), error = function(e) NA_character_),
       LB_p        = tryCatch(.lb_p(m), error = function(e) NA_real_),
       SEATS_model_switch = .has_seats_model_switch_msg(m),
+      SEATS_operative_model = .seats_model_used(m),
       SEATS_has_seasonal = .seats_has_seasonal(m)
     ) |>
       dplyr::bind_cols(.qs_on_sa_both(m)) |>
@@ -494,7 +579,8 @@ auto_seasonal_analysis <- function(y,
   best_lab <- ranked$model_label[1]
   best_fit <- fits[[match(best_lab, labels)]]
   
-  # Weak seasonality flag
+  # Weak seasonality requires both a sub-1 percentage-point peak-to-trough
+  # amplitude and less than 5% volatility reduction.
   weak_seasonality_flag <- with(ranked[1, ],
                                 is.finite(seasonal_amp_pct) & seasonal_amp_pct < 1 &
                                   is.finite(vola_reduction_pct) & vola_reduction_pct < 5
@@ -512,8 +598,19 @@ auto_seasonal_analysis <- function(y,
       specs_tried = sp_tried,
       frequency = freq,
       transform = transform_fun,
+      comparison_mode = comparison_mode,
+      regressor_comparison = .compare_regression_sets(
+        best_fit, current_model, comparison_mode
+      ),
       weak_seasonality = weak_seasonality_flag,
-      baseline = list(current_sa = current_sa, current_seasonal = current_seasonal),
+      baseline = .build_switch_baseline(
+        current_model = current_model,
+        y = y,
+        best_model = best_fit,
+        current_sa = current_sa,
+        current_seasonal = current_seasonal,
+        candidate_transform = transform_fun
+      ),
       seasonality = seasonality
     ),
     class = "auto_seasonal_analysis"

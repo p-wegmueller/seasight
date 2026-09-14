@@ -13,7 +13,8 @@ sa_compare(res, current_model)
 }
 \value{
 A list of class \code{"seasight_sa_compare"} with elements:
-\code{decision}, \code{summary}, \code{series}, \code{diagnostics}, and \code{table}.
+\code{decision}, \code{summary}, \code{series}, \code{diagnostics}, and \code{table}. The decision
+uses the incumbent-relative rule documented in \code{\link[=sa_should_switch]{sa_should_switch()}}.
 }
 \description{
 Summarises the incumbent \code{current_model} against the best model stored in an

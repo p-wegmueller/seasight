@@ -56,7 +56,8 @@ sa_issue_report_html <- function(
     outlier_types    = c("AO","LS","TC"),
     outlier_method   = "AddOne",
     outlier_critical = 4,
-    outlier_alpha    = NULL
+    outlier_alpha    = NULL,
+    comparison_mode = c("full_search", "incumbent_fixed")
 ){
   # ---------- small helpers -------------------------------------------------
 
@@ -144,6 +145,7 @@ sa_issue_report_html <- function(
   print_which    <- match.arg(print_which)
   include_easter <- if (is.logical(include_easter)) { if (include_easter) "auto" else "off" } else { match.arg(include_easter) }
   engine         <- match.arg(engine)
+  comparison_mode <- match.arg(comparison_mode)
   
   if (!is.null(file)) outfile <- file
   
@@ -167,6 +169,7 @@ sa_issue_report_html <- function(
       td_usertype = td_usertype,
       td_candidates = td_candidates,
       current_model = current_model,
+      comparison_mode = comparison_mode,
       include_history_top_n = 10,
       outlier_types    = outlier_types,
       outlier_method   = outlier_method,
@@ -186,6 +189,7 @@ sa_issue_report_html <- function(
   best_has_td  <- isTRUE(best_r$with_td)
   best_td_name <- if (best_has_td) (best_r$td_name %||% NULL) else NULL
   best_td_label <- if (best_has_td) (best_r$td_label %||% best_r$td_name %||% NULL) else NULL
+  summary_switch_warning <- .seats_switch_warning_tag(res, location = "summary")
   
   # Try to recover the incumbent id robustly from result structure
   incumbent_spec_id <- res$incumbent_spec_id %||% res$current_spec_id %||% {
@@ -219,20 +223,21 @@ sa_issue_report_html <- function(
   
   # --- Decision pill text -------------------------------------------------
   has_baseline <- !is.null(current_model) || !is.null(res$baseline$current_sa)
+  switch_assessment <- NULL
   decision_txt <- if (dna) {
     "DO_NOT_ADJUST"
   } else if (!has_baseline) {
     "no current model provided"
   } else {
-    sa_should_switch(res)  # "CHANGE_TO_NEW_MODEL" or "KEEP_CURRENT_MODEL"
+    switch_assessment <- sa_should_switch(
+      res,
+      current_model = current_model,
+      details = TRUE
+    )
+    switch_assessment$decision
   }
   
-  decision_reason <- NULL
-  if (identical(decision_txt, "KEEP_CURRENT_MODEL") && is.finite(best_r$LB_p) && best_r$LB_p < 0.05) {
-    decision_reason <- "Best candidate fails residual autocorrelation test"
-  } else if (identical(decision_txt, "KEEP_CURRENT_MODEL") && is.finite(best_r$corr_seas) && best_r$corr_seas > 0.995) {
-    decision_reason <- "New model produces almost identical seasonal factors"
-  }
+  decision_reason <- if (!is.null(switch_assessment)) switch_assessment$reason else NULL
   
   # Copy-paste code blocks
   if (no_sa) {
@@ -416,10 +421,10 @@ sa_issue_report_html <- function(
         "p = {.flagP(best_r$td_p, 0.05)}."
       )
     }
-    amp_line <- glue::glue(
-      "Seasonal amplitude: { .num(best_r$seasonal_amp_abs,2) } ",
-      "({ .pct(best_r$seasonal_amp_pct,1) } of level). ",
-      "Volatility reduction (SA vs raw): { .pct(best_r$vola_reduction_pct,1) }."
+    amp_line <- paste0(
+      .seasonal_amplitude_report_text(best_r), " ",
+      "Volatility reduction (SA vs raw): ",
+      .pct(best_r$vola_reduction_pct, 1), "."
     )
   }
   
@@ -535,6 +540,7 @@ document.addEventListener('click', function(e){
                                           .build_existence_card(res),
                                           htmltools::div(class="card",
                                                          htmltools::tags$h2("Summary"),
+                                                         summary_switch_warning,
                                                          htmltools::div(class="kv",
                                                                         htmltools::div(htmltools::HTML(paste0("<b>Seasonality (robust)</b>: <span class='pill'>", ui_exist$call, "</span>"))),
                                                                         if (!is.null(ui_exist$note)) htmltools::div(htmltools::HTML(paste0("<b>Note</b>: ", htmltools::htmlEscape(ui_exist$note)))),
@@ -665,7 +671,7 @@ document.addEventListener('click', function(e){
                                                                            "Columns include: AICc; Ljung-Box p (residual autocorrelation); QS p-values from X-11 and SEATS; ",
                                                                            "overall QS (the minimum of those two); trading-day p (if a TD regressor is present); ",
                                                                            "volatility reduction of SA vs. original (based on percent-change standard deviations); ",
-                                                                           "seasonal amplitude as % of the original level; L1 distance of the new SA vs. the current SA (if available); ",
+                                                                           "peak-to-trough seasonal amplitude (factor percentage-point range for log models; additive range relative to median absolute level otherwise); L1 distance of the new SA vs. the current SA (if available); ",
                                                                            "and mean absolute history-change revision (Rev. MAE)."
                                                          )
                                           )
@@ -692,6 +698,8 @@ document.addEventListener('click', function(e){
 #' Notes:
 #' - If the provided *current* specification equals the selected *best* model,
 #'   the report omits the "Alternative model" comparison section.
+#' - A reported SEATS model substitution is highlighted in both the summary
+#'   and engine-choice cards, with requested and operative models when known.
 #' - The "Top candidates" table starts with the best model and always includes
 #'   the current model (flagged as current) when one is supplied.
 #'
@@ -699,6 +707,10 @@ document.addEventListener('click', function(e){
 #'   `tsbox::ts_ts()` can convert to `ts`.
 #' @param current_model Optional incumbent [seasonal::seas()] model to compare
 #'   against the newly selected specification.
+#' @param comparison_mode Comparison design passed to
+#'   [auto_seasonal_analysis()]. `"full_search"` lets candidates select their
+#'   own regressors and outliers; `"incumbent_fixed"` retains the incumbent's
+#'   transformation and regression variables while varying ARIMA and engine.
 #' @param td_usertype Character string passed as `regression.usertype` when
 #'   trading-day regressors are used (default `"td"`).
 #' @param td_candidates Optional named list of trading-day candidate regressors
@@ -720,11 +732,12 @@ document.addEventListener('click', function(e){
 #' @param print_which Which code blocks to print when `print_to_console = TRUE`.
 #'   One of `"new"`, `"current"` or `"both"`.
 #' @param include_easter Controls inclusion of Easter regressors:
-#'   `"auto"` (default) lets the selector decide, `"always"` always includes
-#'   Easter, `"off"` never includes Easter. A logical value is also accepted
-#'   and mapped to `"auto"`/`"off"`.
-#' @param easter_len Integer, length (in days) of the Easter effect when
-#'   included.
+#'   `"auto"` (default) asks X-13 to select among its supported Easter
+#'   windows or reject Easter, `"always"` fixes `easter[easter_len]`, and
+#'   `"off"` neither includes nor tests Easter. A logical value is also
+#'   accepted and mapped to `"auto"`/`"off"`.
+#' @param easter_len Integer, length (in days) of the Easter effect imposed by
+#'   `include_easter = "always"`. It is ignored in `"auto"` and `"off"` modes.
 #' @param engine Preferred decomposition engine for candidate models.
 #'   One of `"seats"`, `"x11"` or `"auto"`.
 #' @param w_engine Numeric weight for the engine choice component in the
@@ -773,12 +786,14 @@ sa_report_html <- function(
     outlier_types    = c("AO","LS","TC"),
     outlier_method   = "AddOne",
     outlier_critical = 4,
-    outlier_alpha    = NULL
+    outlier_alpha    = NULL,
+    comparison_mode = c("full_search", "incumbent_fixed")
 ) {
   if (!is.null(file)) outfile <- file
   sa_issue_report_html(
     y = y,
     current_model = current_model,
+    comparison_mode = match.arg(comparison_mode),
     td_usertype   = td_usertype,
     td_candidates = td_candidates,
     use_fivebest  = use_fivebest,
@@ -809,7 +824,9 @@ sa_report_html <- function(
 #' model** (if supplied) even if it is not in the top `n`. The airline
 #' reference model ARIMA (0 1 1)(0 1 1) is also appended if absent.
 #'
-#' Rows are lightly shaded: best (green), current (blue), airline (red).
+#' Rows are lightly shaded: best (green), current (blue), airline (red). The
+#' table reports the requested ARIMA, the operative SEATS model when available,
+#' and a stable `yes`/`no`/`n/a` SEATS-switch indicator.
 #'
 #' @param res Result of [auto_seasonal_analysis()].
 #' @param current_model Optional fitted [seasonal::seas] model to mark as "current".
@@ -981,7 +998,7 @@ sa_top_candidates_table <- function(res, current_model = NULL, y = NULL, n = 5) 
 
   th <- c("Label","ARIMA","TD regressor","Score (0-100)","AICc","LB p",
           "QSori p","QS X-11 p","QS SEATS p","QS (min)","TD p",
-          "Volatility \u2193 %","Seasonal amp %","L1 vs prev SA","Rev MAE")
+          "Volatility \u2193 %","Seasonal P-T amp. %","L1 vs prev SA","Rev MAE")
   header <- htmltools::tags$tr(lapply(th, htmltools::tags$th))
   
   body_rows <- lapply(seq_len(n_top), function(i) {
@@ -1119,7 +1136,7 @@ sa_top_candidates_table <- function(res, current_model = NULL, y = NULL, n = 5) 
           "Diagnostics for the winner: QS(X-11) p = ", P(qs_x11),
           ", QS(SEATS) p = ", P(qs_seats),
           " \u2192 overall QS = ", P(qs_min), "; Ljung-Box p = ", P(lb_p),
-          "; volatility reduction (SA vs. original) = ", N(vola_red, 1), "%; seasonal amplitude = ",
+          "; volatility reduction (SA vs. original) = ", N(vola_red, 1), "%; seasonal peak-to-trough amplitude = ",
           N(seas_amp, 2), "%."
         )
       )

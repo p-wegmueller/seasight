@@ -30,7 +30,7 @@ test_that("sa_compare returns a self-contained comparison object", {
   cmp <- sa_compare(res, current_model)
 
   expect_s3_class(cmp, "seasight_sa_compare")
-  expect_equal(cmp$decision, "CHANGE_TO_NEW_MODEL")
+  expect_equal(cmp$decision, "KEEP_CURRENT_MODEL")
   expect_named(cmp, c("decision", "summary", "series", "diagnostics", "table"))
   expect_s3_class(cmp$summary, "tbl_df")
   expect_true(all(c("metric", "current", "best", "difference") %in% names(cmp$summary)))
@@ -55,5 +55,19 @@ test_that("sa_should_switch validates result structure", {
   expect_error(
     sa_should_switch(structure(list(table = tibble::tibble()), class = "auto_seasonal_analysis")),
     "`res\\$table` must contain"
+  )
+  expect_error(
+    sa_should_switch(
+      structure(list(table = tibble::tibble(AICc = 1)), class = "auto_seasonal_analysis"),
+      current_model = list()
+    ),
+    "`current_model` must be"
+  )
+  expect_error(
+    sa_should_switch(
+      structure(list(table = tibble::tibble(AICc = 1)), class = "auto_seasonal_analysis"),
+      details = NA
+    ),
+    "`details` must be"
   )
 })

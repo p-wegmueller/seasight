@@ -26,7 +26,8 @@ sa_report_html(
   outlier_types = c("AO", "LS", "TC"),
   outlier_method = "AddOne",
   outlier_critical = 4,
-  outlier_alpha = NULL
+  outlier_alpha = NULL,
+  comparison_mode = c("full_search", "incumbent_fixed")
 )
 }
 \arguments{
@@ -68,12 +69,13 @@ print the copy-pasteable model code to the console and return it.}
 One of \code{"new"}, \code{"current"} or \code{"both"}.}
 
 \item{include_easter}{Controls inclusion of Easter regressors:
-\code{"auto"} (default) lets the selector decide, \code{"always"} always includes
-Easter, \code{"off"} never includes Easter. A logical value is also accepted
-and mapped to \code{"auto"}/\code{"off"}.}
+\code{"auto"} (default) asks X-13 to select among its supported Easter
+windows or reject Easter, \code{"always"} fixes \code{easter[easter_len]}, and
+\code{"off"} neither includes nor tests Easter. A logical value is also
+accepted and mapped to \code{"auto"}/\code{"off"}.}
 
-\item{easter_len}{Integer, length (in days) of the Easter effect when
-included.}
+\item{easter_len}{Integer, length (in days) of the Easter effect imposed by
+\code{include_easter = "always"}. It is ignored in \code{"auto"} and \code{"off"} modes.}
 
 \item{engine}{Preferred decomposition engine for candidate models.
 One of \code{"seats"}, \code{"x11"} or \code{"auto"}.}
@@ -92,6 +94,11 @@ passed to \code{seasonal::seas()} (e.g. \code{"AddOne"}).}
 
 \item{outlier_alpha}{Optional numeric significance level; if supplied, it is
 converted to a two-sided normal cutoff for \code{outlier_critical}.}
+
+\item{comparison_mode}{Comparison design passed to
+\code{\link[=auto_seasonal_analysis]{auto_seasonal_analysis()}}. \code{"full_search"} lets candidates select their
+own regressors and outliers; \code{"incumbent_fixed"} retains the incumbent's
+transformation and regression variables while varying ARIMA and engine.}
 }
 \value{
 Invisibly, a list with elements \code{report} (path to the HTML file) and
@@ -110,6 +117,8 @@ Notes:
 \itemize{
 \item If the provided \emph{current} specification equals the selected \emph{best} model,
 the report omits the "Alternative model" comparison section.
+\item A reported SEATS model substitution is highlighted in both the summary
+and engine-choice cards, with requested and operative models when known.
 \item The "Top candidates" table starts with the best model and always includes
 the current model (flagged as current) when one is supplied.
 }

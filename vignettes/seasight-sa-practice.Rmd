@@ -410,7 +410,10 @@ to avoid SEATS’ reliance on that internal forecast horizon.
 The result table tells you whether the winning model used an xreg, and which one:
 
 ```{r sa-td-inspect, eval = FALSE}
-res_td$table[1, c("model_label", "with_td", "td_name", "with_easter", "engine", "QS_p", "LB_p")]
+res_td$table[1, c(
+  "model_label", "with_td", "td_name", "with_easter", "easter_window",
+  "engine", "QS_p", "LB_p"
+)]
 ```
 
 The first row records the selected treatment. The overall seasonality component
@@ -488,7 +491,7 @@ between releases) combined with periodic, well-documented model reviews.
 > **With seasight**
 >
 > * `current_model` lets you treat the existing production spec as an explicit baseline.
-> * `sa_should_switch()` implements a transparent decision rule for model changes.
+> * `sa_should_switch()` requires a material, diagnostically defensible improvement over that baseline.
 > * `sa_compare()` summarises the impact of switching in terms of diagnostics and aligned series.
 
 ### 3.5 Documentation, transparency and reproducibility

@@ -181,6 +181,31 @@ NULL
   if (all(is.finite(y)) && min(y, na.rm = TRUE) > 0) "log" else "none"
 }
 
+.seats_switch_state <- function(x) {
+  if (is.null(x) || !length(x)) return(NA)
+  x <- x[[1]]
+  if (is.logical(x)) return(if (is.na(x)) NA else x)
+  if (is.numeric(x)) {
+    if (is.na(x)) return(NA)
+    if (x == 1) return(TRUE)
+    if (x == 0) return(FALSE)
+  }
+  value <- tolower(trimws(as.character(x)))
+  if (value %in% c("yes", "true", "1")) return(TRUE)
+  if (value %in% c("no", "false", "0")) return(FALSE)
+  NA
+}
+
+.seats_model_used <- function(m) {
+  model <- tryCatch(
+    seasonal::udg(m, "seatsmdl", fail = FALSE),
+    error = function(e) NULL
+  )
+  if (is.null(model) || !length(model)) return(NA_character_)
+  model <- trimws(as.character(model[[1]]))
+  if (!length(model) || is.na(model) || !nzchar(model)) NA_character_ else model
+}
+
 .has_seats_model_switch_msg <- function(m) {
   # Robust and summary()-free: infer from UDG keys if present.
   u <- tryCatch(seasonal::udg(m), error = function(e) NULL)
@@ -191,12 +216,7 @@ NULL
   key_idx <- grep("seats.*(model|mdl).*(switch|chang|diff)|model.*seats.*(switch|chang|diff)", nms)
   if (!length(key_idx)) return(NA)
   
-  v <- u[[key_idx[1]]]
-  if (is.logical(v) && length(v) == 1L) return(v)
-  vv <- tolower(as.character(v)[1])
-  if (vv %in% c("yes", "true", "1")) return(TRUE)
-  if (vv %in% c("no", "false", "0")) return(FALSE)
-  NA
+  .seats_switch_state(u[[key_idx[1]]])
 }
 
 # QS on the ORIGINAL series, tested with both engines
@@ -289,6 +309,171 @@ NULL
   tibble::tibble(var = nm, p = as.numeric(p))
 }
 
+.easter_metadata <- function(m) {
+  if (!inherits(m, "seas")) {
+    return(list(with_easter = FALSE, easter_window = NA_integer_))
+  }
+
+  variables <- tryCatch(m$model$regression$variables, error = function(e) NULL)
+  if (is.null(variables)) {
+    variables <- tryCatch(names(stats::coef(m)), error = function(e) character())
+  }
+  variables <- as.character(variables %||% character())
+  easter <- grep("^easter\\s*\\[\\s*[0-9]+\\s*\\]$", variables,
+                 ignore.case = TRUE, value = TRUE)
+  if (!length(easter)) {
+    return(list(with_easter = FALSE, easter_window = NA_integer_))
+  }
+
+  window <- suppressWarnings(as.integer(sub(
+    ".*\\[\\s*([0-9]+)\\s*\\].*", "\\1", easter[[1]]
+  )))
+  list(with_easter = TRUE, easter_window = window)
+}
+
+.regression_metadata <- function(m) {
+  regression <- if (inherits(m, "seas")) {
+    tryCatch(m$model$regression, error = function(e) NULL)
+  } else {
+    NULL
+  }
+  variables <- as.character(regression$variables %||% character())
+  user_variables <- as.character(regression$user %||% character())
+  effective <- unique(c(variables, user_variables))
+  outliers <- grep("^(ao|ls|tc)[0-9]", effective,
+                   ignore.case = TRUE, value = TRUE)
+  list(
+    variables = variables,
+    user_variables = user_variables,
+    effective_variables = effective,
+    outliers = outliers
+  )
+}
+
+.collapse_regression_terms <- function(x) {
+  x <- as.character(x %||% character())
+  if (length(x)) paste(x, collapse = ", ") else "none"
+}
+
+.compare_regression_sets <- function(candidate, incumbent = NULL,
+                                     comparison_mode = "full_search") {
+  candidate_terms <- .regression_metadata(candidate)$effective_variables
+  incumbent_terms <- .regression_metadata(incumbent)$effective_variables
+  added <- setdiff(candidate_terms, incumbent_terms)
+  removed <- setdiff(incumbent_terms, candidate_terms)
+  unchanged <- setequal(candidate_terms, incumbent_terms)
+
+  summary <- if (!inherits(incumbent, "seas")) {
+    "No fitted incumbent was supplied; regressor differences are unavailable."
+  } else if (unchanged) {
+    paste0("Regressors unchanged: ", .collapse_regression_terms(candidate_terms), ".")
+  } else {
+    paste0(
+      "Added: ", .collapse_regression_terms(added),
+      "; removed: ", .collapse_regression_terms(removed), "."
+    )
+  }
+
+  list(
+    comparison_mode = comparison_mode,
+    incumbent = incumbent_terms,
+    candidate = candidate_terms,
+    added = added,
+    removed = removed,
+    unchanged = unchanged,
+    summary = summary
+  )
+}
+
+.incumbent_fixed_spec <- function(current_model, y) {
+  if (!inherits(current_model, "seas")) {
+    stop(
+      "`comparison_mode = \"incumbent_fixed\"` requires `current_model` to be a fitted `seasonal::seas` object.",
+      call. = FALSE
+    )
+  }
+
+  incumbent_y <- tryCatch(seasonal::original(current_model), error = function(e) NULL)
+  if (is.null(incumbent_y) || !.same_ts_values(incumbent_y, y)) {
+    stop(
+      "`current_model` must have been fitted to the same time series supplied as `y` for an incumbent-fixed comparison.",
+      call. = FALSE
+    )
+  }
+
+  static_call <- tryCatch(
+    seasonal::static(current_model, coef = FALSE, test = FALSE, evaluate = FALSE),
+    error = function(e) NULL
+  )
+  static_args <- if (is.call(static_call)) as.list(static_call) else list()
+  transform <- static_args[["transform.function"]]
+  if (!is.character(transform) || length(transform) != 1L || !nzchar(transform)) {
+    stop(
+      "Could not resolve the incumbent's selected transformation for an incumbent-fixed comparison.",
+      call. = FALSE
+    )
+  }
+
+  metadata <- .regression_metadata(current_model)
+  model_regression <- tryCatch(current_model$model$regression, error = function(e) NULL)
+  xreg <- NULL
+  usertype <- character()
+  if (length(metadata$user_variables)) {
+    xreg <- tryCatch(current_model$list$xreg, error = function(e) NULL)
+    xreg <- tryCatch(tsbox::ts_ts(xreg), error = function(e) NULL)
+    if (is.null(xreg) || !inherits(xreg, "ts")) {
+      stop(
+        "The incumbent uses user regressors, but their stored data could not be resolved. Refit `current_model` with an explicit `xreg` object before using `comparison_mode = \"incumbent_fixed\"`.",
+        call. = FALSE
+      )
+    }
+    xreg_time <- as.numeric(stats::time(xreg))
+    y_time <- as.numeric(stats::time(y))
+    xreg_covers_y <- min(xreg_time) <= min(y_time) + 1e-8 &&
+      max(xreg_time) >= max(y_time) - 1e-8
+    if (stats::frequency(xreg) != stats::frequency(y) || !xreg_covers_y ||
+        NROW(xreg) < length(y) || NCOL(xreg) != length(metadata$user_variables)) {
+      stop(
+        "The incumbent's stored user regressors do not match `y` or the fitted user-regressor set; refit the incumbent with aligned `xreg` data.",
+        call. = FALSE
+      )
+    }
+    usertype <- as.character(
+      model_regression$usertype %||% current_model$list$regression.usertype %||% "user"
+    )
+    if (!length(usertype) || !(length(usertype) %in% c(1L, NCOL(xreg)))) {
+      stop(
+        "The incumbent's stored `regression.usertype` does not match its user regressors; refit the incumbent with explicit user types.",
+        call. = FALSE
+      )
+    }
+  }
+
+  extra_args <- list()
+  incumbent_args <- current_model$list %||% list()
+  keep <- grep("^(transform|regression|forecast)\\.", names(incumbent_args), value = TRUE)
+  drop <- c(
+    "transform.function", "regression.variables", "regression.usertype",
+    "regression.aictest", "regression.b", "regression.fix"
+  )
+  keep <- setdiff(keep, drop)
+  if (length(keep)) extra_args <- incumbent_args[keep]
+
+  has_td <- any(grepl("^(td|td1coef|stocktd|lom|lpyear)",
+                      metadata$effective_variables, ignore.case = TRUE)) ||
+    any(grepl("^(td|trading)", usertype, ignore.case = TRUE))
+
+  list(
+    transform = transform,
+    variables = metadata$variables,
+    user_variables = metadata$user_variables,
+    xreg = xreg,
+    usertype = usertype,
+    with_td = has_td,
+    extra_args = extra_args
+  )
+}
+
 # Fit one spec, returning 1-2 models (engine seats/x11/auto is respected)
 .fit_spec <- function(y, arima_model, transform_fun,
                       auto_outliers = TRUE,
@@ -300,7 +485,8 @@ NULL
                       outlier_types    = c("AO","LS","TC"),
                       outlier_method   = "AddOne",
                       outlier_critical = 4,
-                      engine = c("seats","x11","auto")) {
+                      engine = c("seats","x11","auto"),
+                      fixed_regression = NULL) {
   
   include_easter_mode <- match.arg(include_easter_mode)
   engine <- match.arg(engine)
@@ -311,17 +497,22 @@ NULL
     stop("`.fit_spec()` requires `y` to be convertible to a base `ts`.")
   }
   freq <- stats::frequency(y)
+  fixed_mode <- !is.null(fixed_regression)
   
-  # ---- regression.variables (Easter) ----------------------------------------
+  # ---- Easter specification -------------------------------------------------
   regvars <- character(0)
-  if (include_easter_mode %in% c("auto","always")) {
+  if (fixed_mode) {
+    regvars <- as.character(fixed_regression$variables %||% character())
+    transform_fun <- fixed_regression$transform
+  } else if (identical(include_easter_mode, "always")) {
     regvars <- sprintf("easter[%d]", as.integer(easter_len))
   }
+  regression_aictest <- if (!fixed_mode && identical(include_easter_mode, "auto")) "easter" else NULL
   
   call_args <- list(
     x = y,
     transform.function = transform_fun,
-    regression.aictest = NULL,
+    regression.aictest = regression_aictest,
     arima.model        = arima_model
   )
   
@@ -337,7 +528,11 @@ NULL
   
   # ---- user xreg: align to y and build mts ----------------------------------
   td_used <- FALSE
-  if (!is.null(td_xreg)) {
+  if (fixed_mode && !is.null(fixed_regression$xreg)) {
+    call_args$xreg <- fixed_regression$xreg
+    call_args$regression.usertype <- fixed_regression$usertype
+    td_used <- isTRUE(fixed_regression$with_td)
+  } else if (!fixed_mode && !is.null(td_xreg)) {
     xr <- sa_align_regressor(y, td_xreg)
 
     if (is.null(xr)) {
@@ -356,11 +551,17 @@ NULL
   }
   
   # ---- outliers --------------------------------------------------------------
-  if (isTRUE(auto_outliers)) {
+  if (!fixed_mode && isTRUE(auto_outliers)) {
     call_args$outlier          <- ""
     call_args$outlier.types    <- outlier_types
     call_args$outlier.method   <- outlier_method
     call_args$outlier.critical <- outlier_critical
+  }
+  if (fixed_mode) {
+    call_args$outlier <- NULL
+    if (length(fixed_regression$extra_args)) {
+      call_args[names(fixed_regression$extra_args)] <- fixed_regression$extra_args
+    }
   }
   
   # ---- helper: run seas safely ----------------------------------------------
@@ -426,7 +627,7 @@ NULL
     last_err <- NULL
     
     # only pad when attempting SEATS (not X11)
-    if (td_used && identical(eng_try, "seats")) {
+    if (!fixed_mode && td_used && identical(eng_try, "seats")) {
       lead_n <- as.integer(3L * freq)
       args1$xreg <- .extend_xreg_for_seats(args1$xreg, lead_n = lead_n, usertype = td_usertype)
       args1$forecast.maxlead <- lead_n
@@ -437,9 +638,28 @@ NULL
     if (is.null(run1$model)) {
       last_err <- run1$error
     }
+
+    if (fixed_mode && inherits(run1$model, "seas")) {
+      expected <- unique(c(
+        fixed_regression$variables %||% character(),
+        fixed_regression$user_variables %||% character()
+      ))
+      actual <- .regression_metadata(run1$model)$effective_variables
+      if (!setequal(expected, actual)) {
+        run1 <- list(
+          model = NULL,
+          error = paste0(
+            "The fitted candidate did not retain the incumbent regressor set. ",
+            "Expected: ", .collapse_regression_terms(expected), "; actual: ",
+            .collapse_regression_terms(actual), "."
+          )
+        )
+        last_err <- run1$error
+      }
+    }
     
     # Fallback 1: drop usertype tokens (some X-13 builds are picky)
-    if (is.null(run1$model) && td_used) {
+    if (is.null(run1$model) && td_used && !fixed_mode) {
       alt1 <- args1
       alt1$regression.usertype <- NULL
       run1 <- .run_try(alt1)
@@ -449,7 +669,7 @@ NULL
     }
     
     # Fallback 2: conservative token "td"
-    if (is.null(run1$model) && td_used) {
+    if (is.null(run1$model) && td_used && !fixed_mode) {
       alt2 <- args1
       alt2$regression.usertype <- rep("td", ncol(args1$xreg %||% matrix(NA_real_, 0, 1)))
       run1 <- .run_try(alt2)
@@ -458,11 +678,13 @@ NULL
       }
     }
     
+    easter <- .easter_metadata(run1$model)
     out <- c(out, list(list(
       model       = run1$model,
       with_td     = td_used,
       td_name     = td_name %||% NA_character_,
-      with_easter = length(regvars) > 0,
+      with_easter = easter$with_easter,
+      easter_window = easter$easter_window,
       engine      = eng_try,
       err         = if (is.null(run1$model)) (last_err %||% "unknown error") else NA_character_
     )))
@@ -642,41 +864,112 @@ build_user_xreg <- function(y,
 # Finance-style diagnostics
 .ts_pc_sd <- function(x) stats::sd(tsbox::ts_pc(x), na.rm = TRUE)
 
+.seasonal_amplitude <- function(seasonal_component, original, transform) {
+  unavailable <- tibble::tibble(
+    seasonal_amp_abs = NA_real_,
+    seasonal_amp_pct = NA_real_,
+    seasonal_amp_level = NA_real_,
+    seasonal_amp_basis = NA_character_
+  )
+
+  seasonal_ts <- .ts_or_null(seasonal_component)
+  if (is.null(seasonal_ts)) return(unavailable)
+
+  seasonal_values <- suppressWarnings(as.numeric(seasonal_ts))
+  seasonal_values <- seasonal_values[is.finite(seasonal_values)]
+  if (!length(seasonal_values)) return(unavailable)
+
+  amplitude <- diff(range(seasonal_values))
+  if (!is.finite(amplitude)) return(unavailable)
+
+  transform <- tryCatch(
+    tolower(as.character(transform[[1]])),
+    error = function(e) NA_character_
+  )
+
+  if (identical(transform, "log")) {
+    return(tibble::tibble(
+      seasonal_amp_abs = amplitude,
+      seasonal_amp_pct = 100 * amplitude,
+      seasonal_amp_level = 1,
+      seasonal_amp_basis = "multiplicative_factor"
+    ))
+  }
+
+  if (!identical(transform, "none")) {
+    unavailable$seasonal_amp_abs <- amplitude
+    return(unavailable)
+  }
+
+  original_ts <- .ts_or_null(original)
+  original_values <- if (is.null(original_ts)) {
+    numeric(0)
+  } else {
+    suppressWarnings(as.numeric(original_ts))
+  }
+  original_values <- original_values[is.finite(original_values)]
+  level <- if (length(original_values)) {
+    stats::median(abs(original_values))
+  } else {
+    NA_real_
+  }
+  scale <- if (length(original_values)) max(abs(original_values)) else NA_real_
+  tolerance <- sqrt(.Machine$double.eps) * scale
+  amplitude_pct <- if (
+    is.finite(level) && is.finite(tolerance) && level > tolerance
+  ) {
+    100 * amplitude / level
+  } else {
+    NA_real_
+  }
+
+  tibble::tibble(
+    seasonal_amp_abs = amplitude,
+    seasonal_amp_pct = amplitude_pct,
+    seasonal_amp_level = level,
+    seasonal_amp_basis = "additive_median_abs_level"
+  )
+}
+
 .diagnostics_finance <- function(m, orig_ts) {
   x_orig <- .ts_or_null(orig_ts)
   sa     <- tryCatch(seasonal::final(m), error = function(e) NULL)
   x_sa   <- .ts_or_null(sa)
+  model_transform <- .transform_label(m)
   
   # Try SEATS seasonal first, fallback to X-11 seasonal on ORIGINAL
   seas_comp <- tryCatch(seasonal::series(m, "seats.seasonal"), error = function(e) NULL)
+  seas_model <- m
   if (is.null(seas_comp) && !is.null(x_orig)) {
-    m_x11_orig <- tryCatch(seasonal::seas(x_orig, x11 = ""), error = function(e) NULL)
+    x11_args <- list(x = x_orig, x11 = "")
+    if (model_transform %in% c("log", "none")) {
+      x11_args$transform.function <- model_transform
+    }
+    m_x11_orig <- tryCatch(
+      do.call(seasonal::seas, x11_args),
+      error = function(e) NULL
+    )
     seas_comp  <- tryCatch(seasonal::series(m_x11_orig, "x11.seasonal"), error = function(e) NULL)
+    seas_model <- m_x11_orig
   }
   
   vola_orig <- if (!is.null(x_orig)) { x <- .pc_or_null(x_orig); if (is.null(x)) NA_real_ else stats::sd(x, na.rm = TRUE) } else NA_real_
   vola_sa   <- if (!is.null(x_sa))   { x <- .pc_or_null(x_sa);   if (is.null(x)) NA_real_ else stats::sd(x, na.rm = TRUE) }   else NA_real_
   vola_red_pct <- if (is.finite(vola_orig) && vola_orig > 0 && is.finite(vola_sa)) (1 - vola_sa / vola_orig) * 100 else NA_real_
   
-  if (!is.null(seas_comp)) {
-    seas_ts <- .ts_or_null(seas_comp)
-    if (!is.null(seas_ts) && !is.null(x_orig)) {
-      seas_amp_abs <- diff(range(seas_ts, na.rm = TRUE))
-      seas_amp_pct <- seas_amp_abs / mean(x_orig, na.rm = TRUE) * 100
-    } else {
-      seas_amp_abs <- 0; seas_amp_pct <- 0
-    }
+  transform <- if (is.null(seas_model)) {
+    NA_character_
   } else {
-    seas_amp_abs <- 0; seas_amp_pct <- 0
+    .transform_label(seas_model, fallback = model_transform)
   }
-  
+  amplitude <- .seasonal_amplitude(seas_comp, x_orig, transform)
+
   tibble::tibble(
     vola_sd_pc_orig    = as.numeric(vola_orig),
     vola_sd_pc_sa      = as.numeric(vola_sa),
-    vola_reduction_pct = as.numeric(vola_red_pct),
-    seasonal_amp_abs   = as.numeric(seas_amp_abs),
-    seasonal_amp_pct   = as.numeric(seas_amp_pct)
-  )
+    vola_reduction_pct = as.numeric(vola_red_pct)
+  ) |>
+    dplyr::bind_cols(amplitude)
 }
 
 # Revisions (mean absolute change revisions)
@@ -735,6 +1028,81 @@ build_user_xreg <- function(y,
   Z <- as.matrix(z)
   if (nrow(Z) == 0L) return(NULL)
   list(a = as.numeric(Z[, "a"]), b = as.numeric(Z[, "b"]))
+}
+
+.same_ts_values <- function(x, y, tolerance = sqrt(.Machine$double.eps)) {
+  x <- .ts_or_null(x)
+  y <- .ts_or_null(y)
+  if (is.null(x) || is.null(y)) return(FALSE)
+  if (length(x) != length(y)) return(FALSE)
+  if (!isTRUE(all.equal(stats::tsp(x), stats::tsp(y), tolerance = tolerance))) return(FALSE)
+  isTRUE(all.equal(
+    as.numeric(x),
+    as.numeric(y),
+    tolerance = tolerance,
+    check.attributes = FALSE
+  ))
+}
+
+.build_switch_baseline <- function(current_model = NULL,
+                                   y = NULL,
+                                   best_model = NULL,
+                                   current_sa = NULL,
+                                   current_seasonal = NULL,
+                                   candidate_transform = NA_character_) {
+  baseline <- list(
+    current_sa = current_sa,
+    current_seasonal = current_seasonal,
+    diagnostics = NULL,
+    same_input = FALSE,
+    same_transform = FALSE,
+    same_n = FALSE,
+    aicc_comparable = FALSE
+  )
+  if (!inherits(current_model, "seas")) return(baseline)
+
+  current_original <- tryCatch(seasonal::original(current_model), error = function(e) NULL)
+  current_transform <- suppressMessages(
+    tryCatch(.transform_label(current_model), error = function(e) NA_character_)
+  )
+  best_transform <- if (inherits(best_model, "seas")) {
+    suppressMessages(
+      tryCatch(
+        .transform_label(best_model, fallback = candidate_transform),
+        error = function(e) candidate_transform
+      )
+    )
+  } else {
+    tolower(as.character(candidate_transform)[1])
+  }
+
+  current_n <- tryCatch(.obs_n(current_model), error = function(e) NA_integer_)
+  best_n <- if (inherits(best_model, "seas")) {
+    tryCatch(.obs_n(best_model), error = function(e) NA_integer_)
+  } else {
+    NA_integer_
+  }
+
+  baseline$diagnostics <- tibble::tibble(
+    model = "current",
+    arima = tryCatch(.arima_string(current_model), error = function(e) NA_character_),
+    engine = tryCatch(.engine_used(current_model), error = function(e) NA_character_),
+    AICc = tryCatch(.aicc(current_model), error = function(e) NA_real_),
+    QS_p = tryCatch(.qs_overall_on_SA(current_model), error = function(e) NA_real_),
+    LB_p = tryCatch(.lb_p(current_model), error = function(e) NA_real_),
+    transform = current_transform,
+    n = current_n
+  )
+  baseline$same_input <- .same_ts_values(current_original, y)
+  baseline$same_transform <- is.character(current_transform) &&
+    length(current_transform) == 1L && !is.na(current_transform) &&
+    is.character(best_transform) && length(best_transform) == 1L &&
+    !is.na(best_transform) && identical(tolower(current_transform), tolower(best_transform))
+  baseline$same_n <- is.finite(current_n) && is.finite(best_n) && current_n == best_n
+  baseline$aicc_comparable <- isTRUE(
+    baseline$same_input && baseline$same_transform && baseline$same_n
+  )
+  baseline
 }
 
 .dist_vs_baseline <- function(m, prev_sa = NULL, prev_seasonal = NULL) {
@@ -797,6 +1165,8 @@ seasonality_summary <- function(tbl, majority = 0.6) {
   qs_ok  <- is.na(qsori) || qsori >= 0.10
   
   no_seats <- identical(row$SEATS_has_seasonal, FALSE)
+  # Peak-to-trough amplitude below 1 percentage point: factor range for log
+  # models, or additive range relative to the median absolute level otherwise.
   weak_amp <- is.finite(row$seasonal_amp_pct)   && row$seasonal_amp_pct   < 1
   low_gain <- is.finite(row$vola_reduction_pct) && row$vola_reduction_pct < 5
   

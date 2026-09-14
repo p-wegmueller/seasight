@@ -283,6 +283,10 @@ sa_copyable_call <- function(m, x_expr, xreg_expr = NA,
 #' Delegates to the internal `.do_not_adjust()` to keep logic in one place.
 #' @param row One-row tibble from `res$table`.
 #' @return TRUE if the row satisfies the "do not adjust" rule, FALSE otherwise.
+#' @details The weak-amplitude threshold is one percentage point of
+#'   peak-to-trough seasonal amplitude. For log models, the amplitude is the
+#'   seasonal-factor range multiplied by 100. For level models, it is the
+#'   additive seasonal range relative to the median absolute series level.
 #'
 #' @examples
 #' row <- tibble::tibble(
@@ -313,7 +317,8 @@ sa_is_do_not_adjust <- function(row) {
 #' @param res Result from `auto_seasonal_analysis()`.
 #' @param current_model A fitted `seas` object to compare against.
 #' @return A list of class `"seasight_sa_compare"` with elements:
-#'   `decision`, `summary`, `series`, `diagnostics`, and `table`.
+#'   `decision`, `summary`, `series`, `diagnostics`, and `table`. The decision
+#'   uses the incumbent-relative rule documented in [sa_should_switch()].
 #'
 #' @examples
 #' \donttest{
@@ -422,7 +427,7 @@ sa_compare <- function(res, current_model) {
 
   structure(
     list(
-      decision = sa_should_switch(res),
+      decision = sa_should_switch(res, current_model = current_model),
       summary = summary,
       series = list(
         current_sa = current_sa,

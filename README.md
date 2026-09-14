@@ -129,6 +129,13 @@ sa_report_html(
 )
 ```
 
+For an ARIMA-only attribution check, set `comparison_mode =
+"incumbent_fixed"`. This requires `current_model` and holds its selected
+transformation, calendar terms, fixed outliers and stored user regressors
+constant while candidate ARIMA specifications (and the requested engine) are
+refitted. Coefficients remain free. The candidate table records
+`comparison_mode`, `regression_variables` and `outlier_variables`.
+
 ## Decision Logic In Brief
 
 `auto_seasonal_analysis()` may fit several X-13 models: default specifications,
@@ -140,10 +147,13 @@ when you need a broader review.
 Model ranking combines residual seasonality on the adjusted series (`QS_p`),
 Ljung-Box residual diagnostics, AICc, revision metrics for the top candidates,
 distance from any incumbent model, and an engine-preference penalty. The
-switching helper `sa_should_switch()` is deliberately narrower: it checks the
-best row against configurable thresholds for QS, Ljung-Box, distance to the
-incumbent and seasonal-component correlation, returning either
-`"CHANGE_TO_NEW_MODEL"` or `"KEEP_CURRENT_MODEL"`.
+switching helper `sa_should_switch()` then compares the selected candidate with
+the incumbent. A change requires a material improvement in comparable AICc,
+acceptable absolute diagnostics, no material deterioration in QS or
+Ljung-Box p-values, and compliance with distance and seasonal-correlation
+safeguards. Identical adjustments are kept. Missing or non-comparable evidence
+is reported as `"REVIEW_REQUIRED"`; without an incumbent the result is
+`"NO_BASELINE"`.
 
 `sa_report_html()` writes an HTML file. In examples, use `tempfile()` or an
 explicit review-output path so report generation does not unexpectedly create
@@ -178,8 +188,17 @@ res_td <- auto_seasonal_analysis(
   engine = "auto"
 )
 
-res_td$table[1, c("model_label", "with_td", "td_name", "td_p", "score_100")]
+res_td$table[1, c(
+  "model_label", "with_td", "td_name", "with_easter", "easter_window",
+  "td_p", "score_100"
+)]
 ```
+
+With `include_easter = "auto"`, X-13 tests whether Easter improves the model
+and selects among its supported Easter windows. Use `"always"` to impose
+`easter[easter_len]`, or `"off"` to disable both inclusion and testing. The
+candidate table records the effect actually retained in `with_easter` and
+`easter_window`.
 
 For moving-holiday pulses, use `build_user_xreg()`:
 

@@ -80,6 +80,32 @@ Key differences compared to the “no baseline” case:
   correlation of seasonal factors).
 * The decision helper `sa_should_switch()` becomes meaningful.
 
+When the purpose is to attribute an AICc difference specifically to ARIMA
+orders, hold the incumbent's selected transformation and regressors fixed:
+
+```{r incumbent-fixed, eval = FALSE}
+res_fixed <- auto_seasonal_analysis(
+  y               = x,
+  current_model   = m_current,
+  comparison_mode = "incumbent_fixed",
+  use_fivebest    = FALSE,
+  max_specs       = 3,
+  engine          = "x11"
+)
+
+res_fixed$table[, c(
+  "arima", "comparison_mode", "regression_variables", "outlier_variables",
+  "AICc"
+)]
+res_fixed$regressor_comparison
+```
+
+This mode re-estimates regression coefficients but does not reselect
+regressors or outliers. It requires the incumbent to contain any user-regressor
+data it used; unresolved data produce an error rather than an unrestricted
+fallback. Use the default `"full_search"` mode for discovery, where regressor
+and outlier choices may vary with each candidate.
+
 ### 1.1 Visual comparison
 
 You can use the full HTML report:
@@ -271,10 +297,12 @@ unless there is a clear quality gain.([European Commission][1])
 sa_should_switch(res_td)
 ```
 
-The function returns a string, typically:
+The function returns one of four strings:
 
-* `"CHANGE_TO_NEW_MODEL"` or
-* `"KEEP_CURRENT_MODEL"`.
+* `"CHANGE_TO_NEW_MODEL"`,
+* `"KEEP_CURRENT_MODEL"`,
+* `"REVIEW_REQUIRED"`, or
+* `"NO_BASELINE"`.
 
 Internally, it uses the *best* row of `res$table`. The rule checks:
 
@@ -282,6 +310,15 @@ Internally, it uses the *best* row of `res$table`. The rule checks:
   The new model must pass basic tests (QS on SA, Ljung–Box). If the best model
   fails badly (e.g. strong remaining seasonality, severe autocorrelation),
   the recommendation is to **keep** the current model.
+
+* **Incumbent-relative improvement:**
+  The candidate must improve comparable AICc by a material amount (2 points by
+  default), without a material decline in QS or Ljung–Box p-values. AICc is
+  treated as comparable only when the input sample and transformation agree.
+
+* **Identity:**
+  If the candidate and incumbent produce the same seasonally adjusted series
+  within tolerance, the recommendation is to **keep** the incumbent.
 
 * **Similarity of seasonal pattern:**
   The seasonal factors should remain sufficiently correlated with the
@@ -291,10 +328,12 @@ Internally, it uses the *best* row of `res$table`. The rule checks:
   The candidate's seasonally adjusted series should not be an outlying distance
   from the incumbent relative to the candidate set.
 
-The broader ranking step in `auto_seasonal_analysis()` also uses AICc, revision
+The broader ranking step in `auto_seasonal_analysis()` uses AICc, revision
 metrics for the top candidates, distance-to-incumbent diagnostics and an engine
-preference penalty. Those quantities determine which row is considered "best";
-`sa_should_switch()` then applies the narrower switching gate to that row.
+preference penalty. Those quantities determine which row is considered "best".
+`sa_should_switch()` then compares that row directly with the incumbent. If the
+incumbent evidence is missing or not comparable, it returns
+`"REVIEW_REQUIRED"`; without an incumbent it returns `"NO_BASELINE"`.
 
 You can tune the thresholds via arguments such as
 
@@ -304,11 +343,17 @@ sa_should_switch(
   thresholds = list(
     min_qs_p = 0.10,
     min_lb_p = 0.05,
+    min_delta_aicc = 2,
+    max_qs_p_drop = 0.05,
+    max_lb_p_drop = 0.05,
     min_corr_seas = 0.90,
     max_dist_sa_mult = 1.25
   )
 )
 ```
+
+Use `details = TRUE` to retrieve the decision reason and supporting comparison
+metrics for logging or custom reports.
 
 ### 3.3 Putting it together: a minimal decision wrapper
 

@@ -11,23 +11,79 @@ t_safe <- function(x) {
 }
 
 .report_get <- function(row, nm, default = NA) {
-  if (!nm %in% names(row)) return(default)
-  v <- row[[nm]]
-  if (!length(v)) default else v[[1]]
+  tryCatch({
+    if (!nm %in% names(row)) return(default)
+    value <- row[[nm]]
+    if (!length(value)) return(default)
+    value <- value[[1]]
+    if (!length(value)) default else value[[1]]
+  }, error = function(e) default)
 }
 
 .report_chr <- function(x, default = "") {
-  x <- as.character(x %||% default)
-  x[is.na(x)] <- default
-  x
+  tryCatch({
+    if (is.null(x) || !length(x)) return(default)
+    if (is.list(x)) x <- x[[1]]
+    if (!length(x)) return(default)
+    value <- as.character(x[[1]])
+    if (is.na(value)) default else value
+  }, error = function(e) default)
+}
+
+.report_numeric <- function(x, default = NA_real_) {
+  tryCatch({
+    if (is.null(x) || !length(x)) return(default)
+    if (is.list(x)) x <- x[[1]]
+    if (!length(x)) return(default)
+    value <- suppressWarnings(as.numeric(x[[1]]))
+    if (length(value) != 1L || !is.finite(value)) default else value
+  }, error = function(e) default)
 }
 
 .report_num <- function(x, digits = 1) {
-  x <- suppressWarnings(as.numeric(x))
-  ifelse(is.finite(x), sprintf(paste0("%.", digits, "f"), x), "-")
+  value <- .report_numeric(x)
+  if (is.finite(value)) sprintf(paste0("%.", digits, "f"), value) else "-"
 }
 
-.report_p <- function(x) .fmtP(suppressWarnings(as.numeric(x)))
+.report_p <- function(x) {
+  value <- .report_numeric(x)
+  if (is.finite(value)) .fmtP(value) else "\u2014"
+}
+
+.seasonal_amplitude_report_text <- function(row) {
+  amplitude <- .report_numeric(.report_get(row, "seasonal_amp_abs", NA_real_))
+  amplitude_pct <- .report_numeric(
+    .report_get(row, "seasonal_amp_pct", NA_real_)
+  )
+  basis <- .report_chr(.report_get(row, "seasonal_amp_basis", ""), "")
+
+  if (!is.finite(amplitude)) return("Seasonal amplitude: unavailable.")
+
+  if (identical(basis, "multiplicative_factor") && is.finite(amplitude_pct)) {
+    return(sprintf(
+      "Seasonal-factor peak-to-trough range: %.2f (%.1f percentage points).",
+      amplitude, amplitude_pct
+    ))
+  }
+
+  if (identical(basis, "additive_median_abs_level")) {
+    if (is.finite(amplitude_pct)) {
+      return(sprintf(
+        "Additive seasonal peak-to-trough range: %.2f (%.1f%% of median absolute level).",
+        amplitude, amplitude_pct
+      ))
+    }
+    return(paste0(
+      "Additive seasonal peak-to-trough range: ", sprintf("%.2f", amplitude),
+      " (percentage unavailable: median absolute level is zero or unavailable)."
+    ))
+  }
+
+  if (is.finite(amplitude_pct)) {
+    return(sprintf("Seasonal peak-to-trough amplitude: %.1f%%.", amplitude_pct))
+  }
+  "Seasonal amplitude: unavailable."
+}
 
 .report_norm <- function(x) gsub("\\s+", " ", trimws(ifelse(is.na(x), "", as.character(x))))
 
@@ -36,6 +92,18 @@ t_safe <- function(x) {
   if (!with_td) return("none")
   lab <- .report_chr(.report_get(row, "td_label", .report_get(row, "td_name", "")))
   if (nzchar(lab)) lab else "yes"
+}
+
+.report_easter_label <- function(row) {
+  with_easter <- isTRUE(suppressWarnings(as.logical(.report_get(row, "with_easter", FALSE))))
+  if (!with_easter) return("none")
+  window <- suppressWarnings(as.integer(.report_get(row, "easter_window", NA_integer_)))
+  if (is.finite(window)) paste0("easter[", window, "]") else "included"
+}
+
+.report_seats_switch_label <- function(row) {
+  state <- .seats_switch_state(.report_get(row, "SEATS_model_switch", NA))
+  if (isTRUE(state)) "yes" else if (identical(state, FALSE)) "no" else "n/a"
 }
 
 .report_arima <- function(row) {
@@ -64,7 +132,9 @@ t_safe <- function(x) {
   n_ranked <- min(as.integer(n), n_total)
 
   disp_cols <- c(
-    "model_label", "arima", "with_td", "td_name", "td_label", "score_100",
+    "model_label", "arima", "SEATS_operative_model", "SEATS_model_switch",
+    "with_td", "td_name", "td_label", "with_easter",
+    "easter_window", "score_100",
     "AICc", "LB_p", "QSori_p", "QS_p_x11", "QS_p_seats", "QS_p",
     "td_p", "vola_reduction_pct", "seasonal_amp_pct", "dist_sa_L1", "rev_mae"
   )
@@ -87,12 +157,17 @@ t_safe <- function(x) {
     if (!is.null(prev_arima) && !any(.report_norm(top$arima) == .report_norm(prev_arima), na.rm = TRUE)) {
       qb <- tryCatch(.qs_on_sa_both(current_model), error = function(e) tibble::tibble(QS_p_x11 = NA_real_, QS_p_seats = NA_real_, QS_p = NA_real_))
       qo <- tryCatch(.qs_original(current_model), error = function(e) tibble::tibble(QSori_p = NA_real_))
+      current_easter <- .easter_metadata(current_model)
       prev_row <- tibble::tibble(
         model_label = "current",
         arima = .report_norm(prev_arima),
+        SEATS_operative_model = .seats_model_used(current_model),
+        SEATS_model_switch = .has_seats_model_switch_msg(current_model),
         with_td = FALSE,
         td_name = NA_character_,
         td_label = NA_character_,
+        with_easter = current_easter$with_easter,
+        easter_window = current_easter$easter_window,
         score_100 = NA_real_,
         AICc = tryCatch(.aicc(current_model), error = function(e) NA_real_),
         LB_p = tryCatch(.lb_p(current_model), error = function(e) NA_real_)
@@ -114,9 +189,10 @@ t_safe <- function(x) {
   top$is_airline <- .report_norm(top$arima) == .report_norm(airline_arima)
 
   header <- htmltools::tags$tr(lapply(
-    c("Label", "ARIMA", "Score (0-100)", "TD regressor", "AICc", "LB p", "QSori p",
+    c("Label", "Requested ARIMA", "Operative SEATS model", "SEATS switch",
+      "Score (0-100)", "TD regressor", "Easter", "AICc", "LB p", "QSori p",
       "QS X-11 p", "QS SEATS p", "QS min", "TD p", "Volatility red. %",
-      "Seasonal amp %", "L1 vs prev SA", "Rev. MAE"),
+      "Seasonal P-T amp. %", "L1 vs prev SA", "Rev. MAE"),
     htmltools::tags$th
   ))
 
@@ -127,8 +203,14 @@ t_safe <- function(x) {
       class = row_class,
       htmltools::tags$td(esc(.report_chr(.report_get(r, "model_label", "")))),
       htmltools::tags$td(htmltools::tags$span(class = "model-spec", esc(.report_arima(r)))),
+      htmltools::tags$td(htmltools::tags$span(
+        class = "model-spec",
+        esc(.report_chr(.report_get(r, "SEATS_operative_model", "n/a"), "n/a"))
+      )),
+      htmltools::tags$td(esc(.report_seats_switch_label(r))),
       htmltools::tags$td(.report_num(.report_get(r, "score_100"), 1)),
       htmltools::tags$td(esc(.report_td_label(r))),
+      htmltools::tags$td(esc(.report_easter_label(r))),
       htmltools::tags$td(.report_num(.report_get(r, "AICc"), 2)),
       htmltools::tags$td(.report_p(.report_get(r, "LB_p"))),
       htmltools::tags$td(.report_p(.report_get(r, "QSori_p"))),
@@ -190,6 +272,28 @@ t_safe <- function(x) {
   arima_best <- if (!is.null(override_best_arima) && nzchar(override_best_arima)) override_best_arima else .report_arima(br)
   with_td <- isTRUE(suppressWarnings(as.logical(get1(br, "with_td", FALSE))))
   td_txt <- if (with_td) paste0("with TD regressor ", esc(.report_td_label(br))) else "without TD"
+  easter_txt <- if (isTRUE(suppressWarnings(as.logical(get1(br, "with_easter", FALSE))))) {
+    paste0("with ", esc(.report_easter_label(br)))
+  } else {
+    "without Easter"
+  }
+  comparison_mode <- as.character(
+    res$comparison_mode %||% get1(br, "comparison_mode", "full_search")
+  )[[1]]
+  regressor_summary <- res$regressor_comparison$summary %||%
+    "Regressor differences relative to the incumbent are unavailable."
+  comparison_text <- if (identical(comparison_mode, "incumbent_fixed")) {
+    paste0(
+      "AICc differences use an incumbent-fixed comparison: the incumbent ",
+      "transformation and regressors are retained, and only ARIMA and the ",
+      "requested decomposition engine vary. ", regressor_summary
+    )
+  } else {
+    paste0(
+      "AICc differences use a full-search comparison and may therefore also ",
+      "reflect different regressors or outliers. ", regressor_summary
+    )
+  }
 
   score <- suppressWarnings(as.numeric(get1(br, "score_100", NA_real_)))
   if (!is.finite(score)) score <- .report_score_100(br)[1]
@@ -197,15 +301,29 @@ t_safe <- function(x) {
   score_gap <- if (is.finite(score) && is.finite(runner_score)) score - runner_score else NA_real_
 
   existence <- tryCatch(.existence_call_ui(res)$call, error = function(e) NA_character_)
-  dec <- tryCatch(.compose_decision(existence, br, has_current = !is.null(current_model)), error = function(e) NULL)
-  switch_decision <- if (!is.null(current_model) && !is.null(dec) && identical(dec$decision, "ADJUST")) {
-    tryCatch(sa_should_switch(res), error = function(e) NA_character_)
+  has_current <- !is.null(current_model) ||
+    !is.null(res$baseline$current_sa) ||
+    !is.null(res$baseline$diagnostics)
+  dec <- tryCatch(.compose_decision(existence, br, has_current = has_current), error = function(e) NULL)
+  switch_assessment <- if (has_current && !is.null(dec) && identical(dec$decision, "ADJUST")) {
+    tryCatch(
+      sa_should_switch(res, current_model = current_model, details = TRUE),
+      error = function(e) NULL
+    )
+  } else {
+    NULL
+  }
+  switch_decision <- if (!is.null(switch_assessment)) {
+    switch_assessment$decision
   } else {
     if (!is.null(dec)) dec$decision else NA_character_
   }
-  gate_reason <- if (!is.null(dec) && !identical(dec$decision, "ADJUST")) dec$reason else NA_character_
-  if (!is.null(current_model) && identical(switch_decision, "KEEP_CURRENT_MODEL") && is.na(gate_reason)) {
-    gate_reason <- "The switch gate recommends keeping the current model."
+  gate_reason <- if (!is.null(switch_assessment)) {
+    switch_assessment$reason
+  } else if (!is.null(dec) && !identical(dec$decision, "ADJUST")) {
+    dec$reason
+  } else {
+    NA_character_
   }
 
   qs_x11 <- get1(br, "QS_p_x11")
@@ -216,13 +334,18 @@ t_safe <- function(x) {
   seas_amp <- get1(br, "seasonal_amp_pct")
 
   htmltools::tagList(
+    htmltools::tags$p(
+      htmltools::HTML(paste0(
+        "<b>Comparison mode.</b> ", esc(comparison_text)
+      ))
+    ),
     if (!is.na(gate_reason) && nzchar(gate_reason)) htmltools::tags$p(
       htmltools::HTML(paste0("<b>Decision gate.</b> ", esc(switch_decision), ": ", esc(gate_reason)))
     ) else NULL,
     htmltools::tags$p(
       htmltools::HTML(paste0(
         "<b>Selection rationale.</b> The chosen specification is <code>ARIMA ",
-        esc(arima_best), "</code> ", td_txt,
+        esc(arima_best), "</code> ", td_txt, " and ", easter_txt,
         ", selected because it achieved the <b>highest overall score (0-100; higher is better)</b>",
         if (is.finite(score)) paste0("; score = ", N(score, 1)) else "",
         if (is.finite(score_gap)) paste0("; margin vs. next best = ", N(score_gap, 1)) else "",
@@ -234,7 +357,7 @@ t_safe <- function(x) {
         "Diagnostics for the winner: QS(X-11) p = ", P(qs_x11),
         ", QS(SEATS) p = ", P(qs_seats),
         ", overall QS = ", P(qs_min), "; Ljung-Box p = ", P(lb_p),
-        "; volatility reduction = ", N(vola_red, 1), "%; seasonal amplitude = ",
+        "; volatility reduction = ", N(vola_red, 1), "%; seasonal peak-to-trough amplitude = ",
         N(seas_amp, 2), "%."
       ))
     ),
@@ -242,6 +365,8 @@ t_safe <- function(x) {
       htmltools::HTML(paste0(
         "Runner-up: <code>ARIMA ", esc(.report_arima(sr)), "</code> ",
         if (isTRUE(suppressWarnings(as.logical(get1(sr, "with_td", FALSE))))) paste0("with TD regressor ", esc(.report_td_label(sr))) else "without TD",
+        " and ",
+        if (isTRUE(suppressWarnings(as.logical(get1(sr, "with_easter", FALSE))))) paste0("with ", esc(.report_easter_label(sr))) else "without Easter",
         "."
       ))
     ) else NULL
